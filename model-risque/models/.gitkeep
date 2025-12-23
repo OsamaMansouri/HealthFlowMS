@@ -1,0 +1,4 @@
+# This directory stores trained ML models
+# The default XGBoost model is created automatically on first run
+
+

@@ -1,0 +1,4 @@
+# This directory stores cached NLP models (BioBERT, spaCy)
+# Models are downloaded automatically on first run
+
+

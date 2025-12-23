@@ -1,0 +1,128 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: healthflow-postgres
+    environment:
+      POSTGRES_DB: healthflow
+      POSTGRES_USER: healthflow
+      POSTGRES_PASSWORD: healthflow123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U healthflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Score API Service
+  score-api:
+    build:
+      context: ./score-api
+      dockerfile: Dockerfile
+    container_name: healthflow-score-api
+    ports:
+      - "8085:8085"
+    environment:
+      - DATABASE_URL=postgresql://healthflow:healthflow123@postgres:5432/healthflow
+      - SECRET_KEY=your-secret-key-here
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # DeID Service
+  deid:
+    build:
+      context: ./deid
+      dockerfile: Dockerfile
+    container_name: healthflow-deid
+    ports:
+      - "8082:8082"
+    environment:
+      - DATABASE_URL=postgresql://healthflow:healthflow123@postgres:5432/healthflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Featurizer Service
+  featurizer:
+    build:
+      context: ./featurizer
+      dockerfile: Dockerfile
+    container_name: healthflow-featurizer
+    ports:
+      - "8083:8083"
+    environment:
+      - DATABASE_URL=postgresql://healthflow:healthflow123@postgres:5432/healthflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Model Risque Service
+  model-risque:
+    build:
+      context: ./model-risque
+      dockerfile: Dockerfile
+    container_name: healthflow-model-risque
+    ports:
+      - "8084:8084"
+    environment:
+      - DATABASE_URL=postgresql://healthflow:healthflow123@postgres:5432/healthflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Audit Fairness Service
+  audit-fairness:
+    build:
+      context: ./audit-fairness
+      dockerfile: Dockerfile
+    container_name: healthflow-audit-fairness
+    ports:
+      - "8086:8086"
+    environment:
+      - DATABASE_URL=postgresql://healthflow:healthflow123@postgres:5432/healthflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Proxy FHIR Service (using existing image)
+  proxy-fhir:
+    image: healthflowms-proxy-fhir:latest
+    container_name: healthflow-proxy-fhir
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/healthflow
+      - SPRING_DATASOURCE_USERNAME=healthflow
+      - SPRING_DATASOURCE_PASSWORD=healthflow123
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Frontend (using existing image)
+  frontend:
+    image: healthflowms-frontend:latest
+    container_name: healthflow-frontend
+    ports:
+      - "8087:80"
+    depends_on:
+      - score-api
+      - deid
+      - featurizer
+      - model-risque
+      - audit-fairness
+      - proxy-fhir
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+

@@ -1,0 +1,508 @@
+"""Main FastAPI application for ScoreAPI service."""
+import time
+from datetime import datetime, timedelta
+from typing import List, Optional
+from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+import structlog
+
+from app.config import get_settings
+from app.database import get_db
+from app.models import User
+from app.schemas import (
+    LoginRequest, TokenResponse, RefreshTokenRequest,
+    UserResponse, UserCreateRequest, UserUpdateRequest,
+    RiskScoreResponse, RiskFactor, HighRiskPatientsResponse,
+    PatientRiskSummary, RiskExplanationResponse,
+    DashboardStats, AuditLogEntry, HealthResponse
+)
+from app.auth import (
+    authenticate_user, create_access_token, create_refresh_token,
+    decode_token, get_current_user, get_admin_user
+)
+from app.services import UserService, AuditService, RiskScoreService, PatientService
+from app.models import DeidPatient, RiskPrediction
+
+settings = get_settings()
+logger = structlog.get_logger()
+
+# Create FastAPI app
+app = FastAPI(
+    title="ScoreAPI",
+    description="Main REST API for HealthFlow-MS - Secure access to risk scores and patient data",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# Audit logging middleware
+@app.middleware("http")
+async def audit_middleware(request: Request, call_next):
+    """Log all API requests for audit trail."""
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = int((time.time() - start_time) * 1000)
+    
+    # Log to structured logger
+    logger.info(
+        "api_request",
+        method=request.method,
+        path=request.url.path,
+        status_code=response.status_code,
+        process_time_ms=process_time
+    )
+    
+    return response
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize on startup."""
+    logger.info("Starting ScoreAPI service", port=settings.service_port)
+
+
+# Health endpoint
+@app.get("/health", response_model=HealthResponse, tags=["Health"])
+async def health_check(db: Session = Depends(get_db)):
+    """Health check endpoint."""
+    try:
+        db.execute(text("SELECT 1"))
+        db_status = "connected"
+    except Exception:
+        db_status = "disconnected"
+    
+    return HealthResponse(
+        status="UP" if db_status == "connected" else "DEGRADED",
+        service="score-api",
+        timestamp=datetime.now(),
+        version="1.0.0",
+        dependencies={
+            "database": db_status,
+            "model_service": settings.model_service_url,
+            "featurizer_service": settings.featurizer_service_url
+        }
+    )
+
+
+# ============================================
+# Authentication Endpoints
+# ============================================
+
+@app.post("/api/v1/auth/login", response_model=TokenResponse, tags=["Authentication"])
+async def login(request: LoginRequest, db: Session = Depends(get_db)):
+    """
+    Authenticate user and return JWT tokens.
+    """
+    user = authenticate_user(db, request.username, request.password)
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Update last login
+    user_service = UserService(db)
+    user_service.update_last_login(user)
+    
+    # Create tokens
+    access_token = create_access_token(data={"sub": user.username})
+    refresh_token = create_refresh_token(data={"sub": user.username})
+    
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=settings.jwt_expiration_hours * 3600,
+        user=UserResponse.model_validate(user)
+    )
+
+
+@app.post("/api/v1/auth/refresh", response_model=TokenResponse, tags=["Authentication"])
+async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
+    """
+    Refresh access token using refresh token.
+    """
+    payload = decode_token(request.refresh_token)
+    
+    if payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token"
+        )
+    
+    username = payload.get("sub")
+    user = db.query(User).filter(User.username == username).first()
+    
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive"
+        )
+    
+    access_token = create_access_token(data={"sub": user.username})
+    new_refresh_token = create_refresh_token(data={"sub": user.username})
+    
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=new_refresh_token,
+        expires_in=settings.jwt_expiration_hours * 3600,
+        user=UserResponse.model_validate(user)
+    )
+
+
+@app.get("/api/v1/auth/me", response_model=UserResponse, tags=["Authentication"])
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """
+    Get current authenticated user information.
+    """
+    return current_user
+
+
+# ============================================
+# Patient Risk Score Endpoints
+# ============================================
+
+@app.get("/api/v1/patients/{patient_id}/risk-score", response_model=RiskScoreResponse, tags=["Risk Scores"])
+async def get_patient_risk_score(
+    patient_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get risk score for a specific patient.
+    """
+    risk_service = RiskScoreService(db)
+    prediction = risk_service.get_patient_risk_score(patient_id)
+    
+    if not prediction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No risk score found for patient {patient_id}"
+        )
+    
+    return RiskScoreResponse(
+        patient_id=prediction.pseudo_patient_id,
+        risk_score=prediction.risk_score,
+        risk_level=prediction.risk_level,
+        prediction_date=prediction.prediction_timestamp,
+        discharge_date=prediction.discharge_date,
+        top_risk_factors=[
+            RiskFactor(**factor) for factor in prediction.top_risk_factors
+        ] if prediction.top_risk_factors else [],
+        confidence_interval=[prediction.confidence_lower, prediction.confidence_upper],
+        model_version="v2.1.0"
+    )
+
+
+@app.get("/api/v1/patients/{patient_id}/risk-explanation", response_model=RiskExplanationResponse, tags=["Risk Scores"])
+async def get_risk_explanation(
+    patient_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get detailed SHAP explanation for a patient's risk score.
+    """
+    risk_service = RiskScoreService(db)
+    prediction = risk_service.get_patient_risk_score(patient_id)
+    
+    if not prediction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No prediction found for patient {patient_id}"
+        )
+    
+    # Generate interpretation text
+    interpretation = f"This patient has a {prediction.risk_level} risk of readmission within 30 days "
+    interpretation += f"with a score of {prediction.risk_score:.2f}. "
+    
+    if prediction.top_risk_factors:
+        top_factor = prediction.top_risk_factors[0]
+        interpretation += f"The main contributing factor is {top_factor['feature']} "
+        interpretation += f"which {top_factor['direction']} the risk."
+    
+    return RiskExplanationResponse(
+        patient_id=prediction.pseudo_patient_id,
+        risk_score=prediction.risk_score,
+        risk_level=prediction.risk_level,
+        shap_values=prediction.shap_values or {},
+        top_risk_factors=[
+            RiskFactor(**factor) for factor in prediction.top_risk_factors
+        ] if prediction.top_risk_factors else [],
+        prediction_date=prediction.prediction_timestamp,
+        interpretation=interpretation
+    )
+
+
+@app.get("/api/v1/patients", response_model=List[PatientRiskSummary], tags=["Patients"])
+async def list_all_patients(
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    List all patients (both FHIR and anonymized) with their risk information if available.
+    """
+    result = []
+    
+    # Get anonymized patients (deid_patients)
+    patient_service = PatientService(db)
+    deid_patients = patient_service.search_patients(limit=limit)
+    
+    for patient in deid_patients:
+        summary = patient_service.get_patient_summary(patient.pseudo_id)
+        if summary:
+            result.append(PatientRiskSummary(**summary))
+        else:
+            result.append(PatientRiskSummary(
+                patient_id=patient.pseudo_id,
+                age_group=patient.age_group,
+                gender=patient.gender,
+                risk_score=None,
+                risk_level=None,
+                last_prediction_date=None
+            ))
+    
+    # Get unique FHIR IDs from deid_patients
+    existing_fhir_ids = {p.original_fhir_id for p in deid_patients if p.original_fhir_id}
+    
+    # Query fhir_patients table directly (patients not yet anonymized)
+    from sqlalchemy import text
+    fhir_query = text("""
+        SELECT fhir_id, gender, birth_date, resource_data, created_at
+        FROM fhir_patients
+        WHERE active = true
+        ORDER BY created_at DESC
+        LIMIT :limit
+    """)
+    fhir_results = db.execute(fhir_query, {"limit": limit * 2}).fetchall()  # Get more to account for filtering
+    
+    for row in fhir_results:
+        fhir_id = row[0]
+        # Skip if already in deid_patients
+        if fhir_id in existing_fhir_ids:
+            continue
+            
+        gender = row[1]
+        birth_date = row[2]
+        resource_data = row[3] if row[3] else {}
+        
+        # Calculate age group if birth_date available
+        age_group = None
+        if birth_date:
+            from datetime import datetime
+            try:
+                if isinstance(birth_date, str):
+                    birth = datetime.strptime(birth_date[:10], '%Y-%m-%d')
+                else:
+                    birth = birth_date
+                age = (datetime.now() - birth).days // 365
+                if age < 18:
+                    age_group = "0-17"
+                elif age < 35:
+                    age_group = "18-34"
+                elif age < 50:
+                    age_group = "35-49"
+                elif age < 65:
+                    age_group = "50-64"
+                else:
+                    age_group = "65+"
+            except:
+                pass
+        
+        result.append(PatientRiskSummary(
+            patient_id=fhir_id,  # Use FHIR ID for non-anonymized patients
+            age_group=age_group,
+            gender=gender,
+            risk_score=None,
+            risk_level=None,
+            last_prediction_date=None
+        ))
+    
+    return result
+
+
+@app.delete("/api/v1/patients/{patient_id}", tags=["Patients"])
+async def delete_patient(
+    patient_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Delete a patient (admin and clinician only).
+    This will soft-delete the patient by setting active=false.
+    """
+    # Only admin and clinician can delete patients
+    if current_user.role not in ["admin", "clinician"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin and clinician can delete patients"
+        )
+    
+    patient_service = PatientService(db)
+    deleted = patient_service.delete_patient(patient_id)
+    
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Patient {patient_id} not found"
+        )
+    
+    return {"message": f"Patient {patient_id} deleted successfully"}
+
+
+@app.get("/api/v1/patients/high-risk", response_model=HighRiskPatientsResponse, tags=["Risk Scores"])
+async def get_high_risk_patients(
+    threshold: float = 0.7,
+    service: Optional[str] = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get list of high-risk patients above threshold.
+    """
+    risk_service = RiskScoreService(db)
+    patients = risk_service.get_high_risk_patients(threshold, limit, service)
+    
+    return HighRiskPatientsResponse(
+        threshold=threshold,
+        count=len(patients),
+        patients=[
+            PatientRiskSummary(
+                patient_id=p["patient_id"],
+                age_group=p["age_group"],
+                gender=p["gender"],
+                risk_score=p["risk_score"],
+                risk_level=p["risk_level"],
+                last_prediction_date=p["last_prediction_date"]
+            )
+            for p in patients
+        ]
+    )
+
+
+@app.post("/api/v1/patients/{patient_id}/predict", tags=["Risk Scores"])
+async def request_new_prediction(
+    patient_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Request a new risk prediction for a patient.
+    """
+    risk_service = RiskScoreService(db)
+    result = await risk_service.request_prediction(patient_id)
+    
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate prediction"
+        )
+    
+    return result
+
+
+# ============================================
+# Dashboard Endpoints
+# ============================================
+
+@app.get("/api/v1/dashboard/stats", response_model=DashboardStats, tags=["Dashboard"])
+async def get_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get dashboard statistics.
+    """
+    risk_service = RiskScoreService(db)
+    return risk_service.get_dashboard_stats()
+
+
+# ============================================
+# User Management (Admin only)
+# ============================================
+
+@app.post("/api/v1/users", response_model=UserResponse, tags=["User Management"])
+async def create_user(
+    request: UserCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Create a new user (all authenticated users).
+    """
+    user_service = UserService(db)
+    
+    # Check if username exists
+    if user_service.get_user_by_username(request.username):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already exists"
+        )
+    
+    # Check if email exists
+    if user_service.get_user_by_email(request.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already exists"
+        )
+    
+    user = user_service.create_user(
+        username=request.username,
+        email=request.email,
+        password=request.password,
+        full_name=request.full_name,
+        role=request.role,
+        department=request.department
+    )
+    
+    return user
+
+
+@app.get("/api/v1/users", response_model=List[UserResponse], tags=["User Management"])
+async def list_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    List all users (all authenticated users).
+    """
+    user_service = UserService(db)
+    return user_service.get_all_users()
+
+
+# ============================================
+# Audit Endpoints
+# ============================================
+
+@app.get("/api/v1/audit/logs", response_model=List[AuditLogEntry], tags=["Audit"])
+async def get_audit_logs(
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get recent audit logs (all authenticated users).
+    """
+    audit_service = AuditService(db)
+    return audit_service.get_recent_logs(limit)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host=settings.service_host, port=settings.service_port)
+
