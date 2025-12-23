@@ -37,14 +37,36 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS configuration - get allowed origins
+cors_origins = settings.cors_origins_list
+print(f"[CORS] Configured origins: {cors_origins}")  # Debug print
+logger.info("CORS origins configured", origins=cors_origins)
+
+# CORS middleware - must be added before routes
+# Note: allow_origins=["*"] doesn't work with allow_credentials=True
+# So we use the explicit list or handle "*" specially
+if cors_origins == ["*"]:
+    # For development: allow all origins (but credentials won't work)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,  # Must be False when using "*"
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+        max_age=3600,
+    )
+else:
+    # Production: specific origins with credentials
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins if cors_origins else ["http://localhost:8087"],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+        max_age=3600,
+    )
 
 
 # Audit logging middleware
@@ -71,6 +93,47 @@ async def audit_middleware(request: Request, call_next):
 async def startup_event():
     """Initialize on startup."""
     logger.info("Starting ScoreAPI service", port=settings.service_port)
+
+
+# Root endpoint
+@app.get("/", tags=["Root"])
+async def root():
+    """Root endpoint - API information and available endpoints."""
+    return {
+        "service": "HealthFlowMS ScoreAPI",
+        "version": "1.0.0",
+        "status": "running",
+        "documentation": {
+            "swagger_ui": "/docs",
+            "redoc": "/redoc"
+        },
+        "endpoints": {
+            "health": "/health",
+            "authentication": {
+                "login": "/api/v1/auth/login",
+                "refresh": "/api/v1/auth/refresh",
+                "me": "/api/v1/auth/me"
+            },
+            "patients": {
+                "list": "/api/v1/patients",
+                "risk_score": "/api/v1/patients/{patient_id}/risk-score",
+                "risk_explanation": "/api/v1/patients/{patient_id}/risk-explanation",
+                "high_risk": "/api/v1/patients/high-risk",
+                "predict": "/api/v1/patients/{patient_id}/predict"
+            },
+            "dashboard": {
+                "stats": "/api/v1/dashboard/stats"
+            },
+            "users": {
+                "create": "/api/v1/users",
+                "list": "/api/v1/users"
+            },
+            "audit": {
+                "logs": "/api/v1/audit/logs"
+            }
+        },
+        "message": "Visit /docs for interactive API documentation"
+    }
 
 
 # Health endpoint

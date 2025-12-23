@@ -93,10 +93,24 @@ The system consists of **8 microservices** following a modern microservices arch
    docker-compose down
    ```
 
-6. **Create default users (first time setup):**
+6. **Initialize database (first time setup):**
 
    ```bash
-   docker exec -it healthflow-score-api python -c "
+   # Create all database tables
+   docker exec healthflow-score-api python -c "
+   import sys
+   sys.path.insert(0, '/app')
+   from app.database import Base, engine
+   from app.models import User, ApiAuditLog, RiskPrediction, DeidPatient
+   Base.metadata.create_all(bind=engine)
+   print('✅ Database tables created!')
+   "
+   ```
+
+7. **Create default users:**
+
+   ```bash
+   docker exec healthflow-score-api python -c "
    import sys
    sys.path.insert(0, '/app')
    from app.database import SessionLocal
@@ -115,9 +129,9 @@ The system consists of **8 microservices** following a modern microservices arch
    for u in users:
        if not user_service.get_user_by_username(u['username']):
            user_service.create_user(u['username'], u['email'], u['password'], u['full_name'], u['role'])
-           print(f'Created user: {u[\"username\"]}')
+           print(f'✅ Created user: {u[\"username\"]}')
        else:
-           print(f'User {u[\"username\"]} already exists')
+           print(f'⚠️  User {u[\"username\"]} already exists')
    "
    ```
 
@@ -139,6 +153,41 @@ The system consists of **8 microservices** following a modern microservices arch
 3. The `admin` account has full access to all features
 
 ⚠️ **Security Note:** These are default credentials for development. **Change all passwords immediately in production environments!**
+
+### Troubleshooting Login Issues
+
+If you encounter **CORS errors** when logging in from the frontend:
+
+1. **Check if score-api is running:**
+
+   ```bash
+   docker-compose ps score-api
+   ```
+
+2. **Restart the score-api service:**
+
+   ```bash
+   docker-compose restart score-api
+   ```
+
+3. **Rebuild if CORS config changed:**
+
+   ```bash
+   docker-compose up -d --build score-api
+   ```
+
+4. **Verify CORS configuration:**
+
+   - The service allows requests from `http://localhost:8087`
+   - Check browser console for specific CORS error messages
+   - Ensure you're accessing the frontend at `http://localhost:8087` (not `https://`)
+
+5. **Test API directly:**
+   ```bash
+   curl -X POST http://localhost:8085/api/v1/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"username":"admin","password":"admin123"}'
+   ```
 
 ## 🧪 Testing with Postman
 

@@ -125,7 +125,13 @@
     % Institution
     {\large\textbf{Groupe 8 - EMSI}}\\[0.15cm]
     {\normalsize École Marocaine des Sciences de l'Ingénieur}\\[0.1cm]
-    {\normalsize Marrakech, Maroc}\\[1cm]
+    {\normalsize Marrakech, Maroc}\\[0.8cm]
+    
+    % Repository GitHub
+    \rule{0.5\textwidth}{0.5pt}\\[0.4cm]
+    {\normalsize\textbf{Repository GitHub}}\\[0.2cm]
+    {\small\url{https://github.com/OsamaMansouri/HealthFlowMS}}\\[0.4cm]
+    \rule{0.5\textwidth}{0.5pt}\\[0.6cm]
     
     % Section Équipe - 3 colonnes
     {\normalsize\textbf{ÉQUIPE DE DÉVELOPPEMENT}}\\[0.4cm]
@@ -1397,14 +1403,18 @@ Un minimum de \textbf{8 GB de RAM} est nécessaire pour faire fonctionner tous l
 
 \textbf{20 GB d'espace disque libre} sont nécessaires pour stocker les images Docker de tous les services, les données de la base de données, et les modèles ML. Les images Docker peuvent être volumineuses, particulièrement celle de Featurizer qui contient les modèles NLP (environ 6 GB). La base de données nécessite également de l'espace pour stocker les données FHIR, les patients anonymisés, les features extraites, et les prédictions. Cette exigence d'espace permet également d'avoir une marge pour la croissance des données au fil du temps.
 
-Enfin, plusieurs \textbf{ports doivent être disponibles} pour que les services puissent communiquer : le port 5433 pour PostgreSQL, les ports 8081 à 8087 pour les différents microservices, et le port 8090 pour HAPI FHIR. Ces ports doivent être libres sur la machine hôte pour éviter les conflits avec d'autres applications. Si certains ports sont déjà utilisés, ils peuvent être modifiés dans le fichier docker-compose.yml, mais cela nécessite également de mettre à jour les configurations des services qui communiquent entre eux.
+Enfin, plusieurs \textbf{ports doivent être disponibles} pour que les services puissent communiquer : le port 5432 pour PostgreSQL, les ports 8081 à 8087 pour les différents microservices, et le port 8090 pour HAPI FHIR. Ces ports doivent être libres sur la machine hôte pour éviter les conflits avec d'autres applications. Si certains ports sont déjà utilisés, ils peuvent être modifiés dans le fichier docker-compose.yml, mais cela nécessite également de mettre à jour les configurations des services qui communiquent entre eux.
 
 \section{Installation}
 
 \subsection{Clonage du Repository}
 
+Le code source du projet est disponible sur GitHub à l'adresse suivante : \url{https://github.com/OsamaMansouri/HealthFlowMS}
+
+Pour cloner le repository et accéder au code source :
+
 \begin{lstlisting}[language=bash, caption=Clonage du projet]
-git clone <repository-url>
+git clone https://github.com/OsamaMansouri/HealthFlowMS.git
 cd HealthFlowMS
 \end{lstlisting}
 
@@ -1423,6 +1433,51 @@ Troisièmement, elle démarre le serveur HAPI FHIR, qui constitue la source de d
 Quatrièmement, elle démarre tous les microservices dans l'ordre approprié, en respectant les dépendances entre services. Les services sont démarrés de manière séquentielle pour garantir que chaque service peut correctement se connecter à ses dépendances (base de données, autres services) avant de commencer à traiter des requêtes. Cette approche garantit que le système démarre de manière cohérente et que tous les services sont prêts à fonctionner avant que le système ne soit considéré comme opérationnel.
 
 Enfin, elle configure le réseau Docker interne qui permet aux services de communiquer entre eux de manière sécurisée et isolée. Ce réseau virtuel garantit que les services peuvent communiquer efficacement sans exposer les ports internes à l'extérieur du système, améliorant ainsi la sécurité. Le réseau est configuré avec des règles de routage appropriées qui garantissent que chaque service peut accéder uniquement aux services dont il a besoin, suivant ainsi le principe du moindre privilège.
+
+\subsection{Initialisation de la Base de Données}
+
+Après le démarrage des services, il est nécessaire d'initialiser la base de données en créant les tables et les utilisateurs par défaut. Cette étape est essentielle pour que le système fonctionne correctement.
+
+\textbf{Création des tables:}
+
+\begin{lstlisting}[language=bash, caption=Création des tables de la base de données]
+docker exec healthflow-score-api python -c "
+import sys
+sys.path.insert(0, '/app')
+from app.database import Base, engine
+from app.models import User, ApiAuditLog, RiskPrediction, DeidPatient
+Base.metadata.create_all(bind=engine)
+print('Tables creees avec succes')
+"
+\end{lstlisting}
+
+\textbf{Création des utilisateurs par défaut:}
+
+\begin{lstlisting}[language=bash, caption=Création des utilisateurs par défaut]
+docker exec healthflow-score-api python -c "
+import sys
+sys.path.insert(0, '/app')
+from app.database import SessionLocal
+from app.services import UserService
+
+db = SessionLocal()
+user_service = UserService(db)
+
+users = [
+    {'username': 'admin', 'password': 'admin123', 'role': 'admin', 'email': 'admin@healthflow.local', 'full_name': 'Administrator'},
+    {'username': 'clinician', 'password': 'admin123', 'role': 'clinician', 'email': 'clinician@healthflow.local', 'full_name': 'Clinical User'},
+    {'username': 'researcher', 'password': 'admin123', 'role': 'researcher', 'email': 'researcher@healthflow.local', 'full_name': 'Researcher'},
+    {'username': 'auditor', 'password': 'admin123', 'role': 'auditor', 'email': 'auditor@healthflow.local', 'full_name': 'Auditor'}
+]
+
+for u in users:
+    if not user_service.get_user_by_username(u['username']):
+        user_service.create_user(u['username'], u['email'], u['password'], u['full_name'], u['role'])
+        print(f'Utilisateur cree: {u[\"username\"]}')
+    else:
+        print(f'Utilisateur {u[\"username\"]} existe deja')
+"
+\end{lstlisting}
 
 \subsection{Vérification}
 
@@ -1443,6 +1498,8 @@ curl http://localhost:8085/health
 curl http://localhost:8086/health
 \end{lstlisting}
 
+Le healthcheck de ScoreAPI devrait retourner \texttt{\{"status":"UP","database":"connected",...\}} si la base de données est correctement initialisée.
+
 \section{Configuration}
 
 \subsection{Variables d'Environnement}
@@ -1461,7 +1518,7 @@ La variable \texttt{LOG\_LEVEL} contrôle le niveau de verbosité des logs gén�
 \hline
 \textbf{Service} & \textbf{Port} \\
 \hline
-PostgreSQL & 5433 \\
+PostgreSQL & 5432 \\
 HAPI FHIR & 8090 \\
 ProxyFHIR & 8081 \\
 DeID & 8082 \\
@@ -1758,6 +1815,8 @@ Le projet a été encadré par trois professeurs de l'EMSI qui ont apporté leur
 
 Ce projet s'inscrit dans le cadre du projet de fin d'études du \textbf{Groupe 8} à l'\textbf{EMSI} (École Marocaine des Sciences de l'Ingénieur). Il démontre l'intégration de compétences multiples en architecture logicielle, développement web, intelligence artificielle, et traitement de données médicales, appliquées à un problème réel de santé publique. Le projet illustre la capacité de l'équipe à concevoir, développer et déployer un système complexe intégrant plusieurs technologies modernes et répondant aux exigences de sécurité, performance et utilisabilité dans le domaine médical.
 
+Le code source complet du projet, incluant tous les microservices, la documentation, et les scripts de déploiement, est disponible publiquement sur GitHub à l'adresse \url{https://github.com/OsamaMansouri/HealthFlowMS}. Ce repository contient l'ensemble du code source, les fichiers de configuration Docker, la documentation technique, et les instructions de déploiement, permettant ainsi à d'autres développeurs et chercheurs de reproduire le système, de contribuer à son amélioration, ou de l'adapter à leurs propres besoins.
+
 \chapter{Structure des Fichiers}
 
 \begin{lstlisting}[language=bash, caption=Structure du projet]
@@ -1799,7 +1858,9 @@ La \textbf{documentation Docker} (\url{https://docs.docker.com/}) a fourni les i
 
 La \textbf{documentation FastAPI} (\url{https://fastapi.tiangolo.com/}) a fourni les informations nécessaires pour développer efficacement les services Python avec FastAPI. Cette documentation est remarquablement complète et bien organisée, couvrant tous les aspects du développement avec FastAPI depuis les concepts fondamentaux jusqu'aux fonctionnalités avancées. Les exemples de code et les guides pratiques de la documentation ont été essentiels pour implémenter rapidement les APIs REST avec validation automatique des données, génération automatique de documentation, et support de l'asynchronicité.
 
-Enfin, la \textbf{documentation Spring Boot} (\url{https://spring.io/projects/spring-boot}) a fourni les informations nécessaires pour développer efficacement le service ProxyFHIR avec Spring Boot. Cette documentation couvre tous les aspects du développement avec Spring Boot, depuis la configuration de base jusqu'aux fonctionnalités avancées comme la gestion des transactions, l'intégration avec les bases de données, et la sécurité. Les guides pratiques et les exemples de code de la documentation ont été particulièrement utiles pour implémenter rapidement les fonctionnalités nécessaires tout en respectant les meilleures pratiques du framework.
+La \textbf{documentation Spring Boot} (\url{https://spring.io/projects/spring-boot}) a fourni les informations nécessaires pour développer efficacement le service ProxyFHIR avec Spring Boot. Cette documentation couvre tous les aspects du développement avec Spring Boot, depuis la configuration de base jusqu'aux fonctionnalités avancées comme la gestion des transactions, l'intégration avec les bases de données, et la sécurité. Les guides pratiques et les exemples de code de la documentation ont été particulièrement utiles pour implémenter rapidement les fonctionnalités nécessaires tout en respectant les meilleures pratiques du framework.
+
+Enfin, le \textbf{repository GitHub du projet} (\url{https://github.com/OsamaMansouri/HealthFlowMS}) constitue la source principale pour accéder au code source complet, à la documentation technique, et aux instructions de déploiement. Ce repository public permet la collaboration, la reproduction des résultats, et la contribution à l'amélioration continue du système.
 
 \newpage
 
@@ -1834,6 +1895,10 @@ Newman, S. (2015). \textit{Building Microservices}. O'Reilly Media.
 \bibitem{docker}
 Merkel, D. (2014). \textit{Docker: lightweight Linux containers for consistent development and deployment}. 
 Linux journal, 2014(239), 2.
+
+\bibitem{github}
+HealthFlowMS Project Repository. \textit{HealthFlowMS - Hospital Readmission Prediction System}. 
+\url{https://github.com/OsamaMansouri/HealthFlowMS}
 
 \end{thebibliography}
 

@@ -28,6 +28,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://healthflow:healthflow123@postgres:5432/healthflow
       - SECRET_KEY=your-secret-key-here
+      - CORS_ORIGINS=http://localhost:8087,http://localhost:3000,http://localhost:8086
     depends_on:
       postgres:
         condition: service_healthy
