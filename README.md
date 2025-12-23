@@ -2,7 +2,7 @@
 
 A comprehensive microservices-based healthcare management system for predicting hospital readmission risk using FHIR standards, Machine Learning (XGBoost), and Natural Language Processing (BioBERT, spaCy).
 
-## 📋 Overview
+## Overview
 
 **HealthFlowMS** is a complete hospital readmission prediction system that:
 
@@ -15,7 +15,7 @@ A comprehensive microservices-based healthcare management system for predicting 
 
 **Model Performance:** AUC-ROC 0.82 | Precision 0.78 | Recall 0.74 | F1-Score 0.76
 
-## 🏗️ Architecture
+## Architecture
 
 The system consists of **8 microservices** following a modern microservices architecture:
 
@@ -53,7 +53,7 @@ The system consists of **8 microservices** following a modern microservices arch
 - **BioBERT** (transformers) (NLP for clinical text)
 - **spaCy 3.7.2** (Named entity recognition)
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -103,7 +103,7 @@ The system consists of **8 microservices** following a modern microservices arch
    from app.database import Base, engine
    from app.models import User, ApiAuditLog, RiskPrediction, DeidPatient
    Base.metadata.create_all(bind=engine)
-   print('✅ Database tables created!')
+   print('Database tables created!')
    "
    ```
 
@@ -129,13 +129,13 @@ The system consists of **8 microservices** following a modern microservices arch
    for u in users:
        if not user_service.get_user_by_username(u['username']):
            user_service.create_user(u['username'], u['email'], u['password'], u['full_name'], u['role'])
-           print(f'✅ Created user: {u[\"username\"]}')
+           print(f'Created user: {u[\"username\"]}')
        else:
-           print(f'⚠️  User {u[\"username\"]} already exists')
+           print(f'User {u[\"username\"]} already exists')
    "
    ```
 
-## 🔐 Login Credentials
+## Login Credentials
 
 **Default users** (change passwords in production!):
 
@@ -152,7 +152,7 @@ The system consists of **8 microservices** following a modern microservices arch
 2. Use any of the credentials above
 3. The `admin` account has full access to all features
 
-⚠️ **Security Note:** These are default credentials for development. **Change all passwords immediately in production environments!**
+**Security Note:** These are default credentials for development. **Change all passwords immediately in production environments!**
 
 ### Troubleshooting Login Issues
 
@@ -189,7 +189,7 @@ If you encounter **CORS errors** when logging in from the frontend:
      -d '{"username":"admin","password":"admin123"}'
    ```
 
-## 🧪 Testing with Postman
+## Testing with Postman
 
 A comprehensive **Postman collection** is available to test all microservices:
 
@@ -248,7 +248,7 @@ docker-compose up -d
 # 4. Test any endpoint - token is automatically included!
 ```
 
-## 📡 Service Endpoints
+## Service Endpoints
 
 Once running, access services at:
 
@@ -290,7 +290,7 @@ POST /api/predict                    # Predict risk
 GET  /api/shap/{patient_id}          # SHAP explanation
 ```
 
-## 🔄 Workflow
+## Workflow
 
 The complete workflow follows these steps:
 
@@ -303,7 +303,7 @@ The complete workflow follows these steps:
 7. **Generate Explanations** → SHAP values
 8. **Visualize** → Frontend / AuditFairness dashboard
 
-## 🤖 Machine Learning
+## Machine Learning
 
 ### Model: XGBoost
 
@@ -341,7 +341,7 @@ SHAP (SHapley Additive exPlanations) provides:
 - Risk factor identification
 - Clinically interpretable explanations
 
-## 🔒 Security & Compliance
+## Security & Compliance
 
 - **HIPAA Safe Harbor** compliant anonymization (18 identifiers removed/modified)
 - **JWT authentication** for API access
@@ -349,7 +349,7 @@ SHAP (SHapley Additive exPlanations) provides:
 - **Audit logging** for all actions
 - **CORS** configuration for secure cross-origin requests
 
-## 📦 Project Structure
+## Project Structure
 
 ```
 HealthFlowMS/
@@ -391,7 +391,7 @@ HealthFlowMS/
 └── README.md
 ```
 
-## 🔧 Development
+## Development
 
 ### Running Individual Services
 
@@ -442,7 +442,7 @@ cd proxy-fhir
 mvn test
 ```
 
-## 📊 Frontend Pages
+## Frontend Pages
 
 1. **Login** (`/login`) - Authentication with JWT
 2. **Dashboard** (`/`) - Overview with statistics and charts
@@ -451,7 +451,7 @@ mvn test
 5. **Workflow** (`/patient-workflow`) - Guided patient creation workflow
 6. **Predictions** (`/predictions`) - Aggregated predictions analysis
 
-## 🗄️ Database Schema
+## Database Schema
 
 **Main Tables:**
 
@@ -462,30 +462,29 @@ mvn test
 - `users` - System users
 - `api_audit_logs` - Audit trail
 
-## 📝 Documentation
+## Documentation
 
-- **Rapport.tex** - Complete project report (1842 lines) with architecture, ML details, workflows
-- **PROJECT_DOCUMENTATION.md** - Summary of key project information
+- **Rapport.tex** - Complete project report with architecture, ML details, workflows
 - **docs/images/** - Screenshots, BPMN diagrams, database schemas
 
-## ⚠️ Important Notes
+## Important Notes
 
 - **Frontend and proxy-fhir source code:** These services are running from pre-built Docker images. Source code was not included in the Docker images (multi-stage builds). The containers are functional and can be used as-is.
 - **Database:** PostgreSQL is automatically set up with docker-compose configuration.
 - **All Python services:** Complete source code is available and can be modified/rebuilt.
 
-## 🎯 Key Features
+## Key Features
 
-- ✅ **FHIR Integration** - Standard medical data format
-- ✅ **HIPAA Compliance** - Safe Harbor anonymization
-- ✅ **ML Predictions** - XGBoost with 0.82 AUC-ROC
-- ✅ **NLP Analysis** - BioBERT + spaCy for clinical notes
-- ✅ **Explainability** - SHAP for transparent predictions
-- ✅ **Fairness Auditing** - Bias detection and correction
-- ✅ **Modern UI** - React/TypeScript frontend
-- ✅ **Microservices** - Scalable, independent services
+- **FHIR Integration** - Standard medical data format
+- **HIPAA Compliance** - Safe Harbor anonymization
+- **ML Predictions** - XGBoost with 0.82 AUC-ROC
+- **NLP Analysis** - BioBERT + spaCy for clinical notes
+- **Explainability** - SHAP for transparent predictions
+- **Fairness Auditing** - Bias detection and correction
+- **Modern UI** - React/TypeScript frontend
+- **Microservices** - Scalable, independent services
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -493,29 +492,19 @@ mvn test
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 👥 Team
+## Contact
 
-**Groupe 8 - EMSI (École Marocaine des Sciences de l'Ingénieur)**
+For questions or inquiries, please contact: mansouri.osama@gmail.com
 
-- **Osama Mansouri** - mansouri.osama@gmail.com
-- **Sohaib Laarichi** - Sohaiblaatichi112@gmail.com
-- **Abouelkemhe Salah Eddine** - slaaaheddine@gmail.com
-
-**Supervisors:**
-
-- Pr. Mohamed LACHGAR (Microservices)
-- Pr. Oumayma OUEDRHIRI (Machine Learning)
-- Pr. Hiba TABBAA (Data Mining & NLP)
-
-## 📄 License
+## License
 
 [Your License Here]
 
-## 🔗 Links
+## Links
 
 - **GitHub Repository:** https://github.com/OsamaMansouri/HealthFlowMS
 - **API Documentation:** Available at `/docs` endpoint of each service
 
 ---
 
-**HealthFlowMS** - Transforming healthcare through AI-powered risk prediction 🏥🤖
+**HealthFlowMS** - Transforming healthcare through AI-powered risk prediction
