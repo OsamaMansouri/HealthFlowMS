@@ -95,10 +95,10 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # FHIR New Service (replaces proxy-fhir)
+  # Proxy FHIR Service
   proxy-fhir:
     build:
-      context: ./fhir-new
+      context: ./proxy-fhir
       dockerfile: Dockerfile
     container_name: healthflow-proxy-fhir
     ports:

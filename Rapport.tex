@@ -435,7 +435,7 @@ GET  /health                      # Healthcheck
 
 \subsection{Améliorations Récentes}
 
-Le service ProxyFHIR a été récemment refactorisé et amélioré pour répondre aux exigences croissantes du système. Une nouvelle implémentation, développée dans le module \texttt{fhir-new}, remplace progressivement l'implémentation originale tout en conservant la compatibilité avec l'API existante. Cette refactorisation apporte plusieurs améliorations significatives.
+Le service ProxyFHIR a été récemment refactorisé et amélioré pour répondre aux exigences croissantes du système. Cette refactorisation apporte plusieurs améliorations significatives tout en conservant la compatibilité avec l'API existante.
 
 \textbf{Architecture améliorée} : La nouvelle implémentation utilise une architecture plus modulaire avec une séparation claire des responsabilités entre les contrôleurs (gestion des requêtes HTTP), les services (logique métier), et les repositories (accès aux données). Cette séparation améliore la maintenabilité du code et facilite les tests unitaires et d'intégration.
 
@@ -1885,9 +1885,9 @@ HealthFlowMS/
 │   └── init/
 │       ├── init_database.py
 │       └── create_default_users.py
-├── fhir-new/
+├── proxy-fhir/
 │   └── src/main/java/...
-│       └── (Service ProxyFHIR refactorisé)
+│       └── (Service ProxyFHIR)
 ├── deid/
 │   └── app/
 │       ├── main.py
