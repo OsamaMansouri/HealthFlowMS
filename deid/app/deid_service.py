@@ -1,6 +1,7 @@
 """De-identification service logic."""
 import hashlib
 import random
+import json
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Tuple
 from faker import Faker
@@ -100,7 +101,15 @@ class DeIdentificationService:
         pseudo_id = self.generate_pseudo_id(patient_fhir_id)
         
         # Get original resource data
-        resource_data = dict(fhir_patient.resource_data) if fhir_patient.resource_data else {}
+        # resource_data is stored as JSON in PostgreSQL, so it might be a dict or a string
+        if not fhir_patient.resource_data:
+            resource_data = {}
+        elif isinstance(fhir_patient.resource_data, dict):
+            resource_data = fhir_patient.resource_data.copy()
+        elif isinstance(fhir_patient.resource_data, str):
+            resource_data = json.loads(fhir_patient.resource_data)
+        else:
+            resource_data = dict(fhir_patient.resource_data) if hasattr(fhir_patient.resource_data, 'items') else {}
         
         # Track modifications
         removed_fields = []

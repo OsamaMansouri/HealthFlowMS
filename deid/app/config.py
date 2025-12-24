@@ -21,12 +21,16 @@ class Settings(BaseSettings):
     age_group_bins: list = [0, 18, 30, 45, 60, 75, 90, 120]
     date_shift_range_days: int = 30
     
+    # CORS - can be set via CORS_ORIGINS env var as comma-separated string
+    cors_origins: str = "http://localhost:8087,http://localhost:3000,http://localhost:8086"
+    
     # Logging
     log_level: str = "INFO"
     
     class Config:
         env_file = ".env"
         case_sensitive = False
+        env_prefix = ""  # No prefix needed, use exact variable names
 
 
 @lru_cache()

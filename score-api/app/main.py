@@ -1,12 +1,13 @@
 """Main FastAPI application for ScoreAPI service."""
 import time
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import structlog
+import httpx
 
 from app.config import get_settings
 from app.database import get_db
@@ -16,7 +17,8 @@ from app.schemas import (
     UserResponse, UserCreateRequest, UserUpdateRequest,
     RiskScoreResponse, RiskFactor, HighRiskPatientsResponse,
     PatientRiskSummary, RiskExplanationResponse,
-    DashboardStats, AuditLogEntry, HealthResponse
+    DashboardStats, AuditLogEntry, HealthResponse,
+    PatientCreateRequest, PatientCreateResponse
 )
 from app.auth import (
     authenticate_user, create_access_token, create_refresh_token,
@@ -24,6 +26,7 @@ from app.auth import (
 )
 from app.services import UserService, AuditService, RiskScoreService, PatientService
 from app.models import DeidPatient, RiskPrediction
+from app.cache import init_redis, get_cache, set_cache, delete_cache, redis_client
 
 settings = get_settings()
 logger = structlog.get_logger()
@@ -93,6 +96,8 @@ async def audit_middleware(request: Request, call_next):
 async def startup_event():
     """Initialize on startup."""
     logger.info("Starting ScoreAPI service", port=settings.service_port)
+    # Initialize Redis cache
+    init_redis(host="redis", port=6379)
 
 
 # Root endpoint
@@ -116,6 +121,7 @@ async def root():
             },
             "patients": {
                 "list": "/api/v1/patients",
+                "create": "/api/v1/patients (POST)",
                 "risk_score": "/api/v1/patients/{patient_id}/risk-score",
                 "risk_explanation": "/api/v1/patients/{patient_id}/risk-explanation",
                 "high_risk": "/api/v1/patients/high-risk",
@@ -157,6 +163,95 @@ async def health_check(db: Session = Depends(get_db)):
             "featurizer_service": settings.featurizer_service_url
         }
     )
+
+
+# Cache test endpoint
+@app.get("/api/v1/cache/test", tags=["Cache"])
+async def test_cache():
+    """
+    Test Redis cache functionality.
+    Tests set, get, and delete operations.
+    """
+    import time
+    from app.cache import get_cache, set_cache, delete_cache, redis_client
+    
+    test_key = "test:cache:healthflow"
+    test_value = {
+        "message": "Cache test",
+        "timestamp": datetime.now().isoformat(),
+        "service": "score-api"
+    }
+    
+    results = {
+        "redis_connected": redis_client is not None,
+        "tests": {}
+    }
+    
+    if not redis_client:
+        return {
+            "status": "error",
+            "message": "Redis not connected",
+            "results": results
+        }
+    
+    try:
+        # Test 1: Set cache
+        set_result = set_cache(test_key, test_value, expire=60)
+        results["tests"]["set"] = {
+            "success": set_result,
+            "key": test_key
+        }
+        
+        # Test 2: Get cache
+        time.sleep(0.1)  # Small delay
+        cached_value = get_cache(test_key)
+        results["tests"]["get"] = {
+            "success": cached_value is not None,
+            "value": cached_value,
+            "matches": cached_value == test_value if cached_value else False
+        }
+        
+        # Test 3: Delete cache
+        delete_result = delete_cache(test_key)
+        results["tests"]["delete"] = {
+            "success": delete_result
+        }
+        
+        # Test 4: Verify deletion
+        after_delete = get_cache(test_key)
+        results["tests"]["verify_delete"] = {
+            "success": after_delete is None
+        }
+        
+        # Get Redis info
+        try:
+            info = redis_client.info()
+            results["redis_info"] = {
+                "version": info.get("redis_version"),
+                "used_memory_human": info.get("used_memory_human"),
+                "connected_clients": info.get("connected_clients"),
+                "total_keys": redis_client.dbsize()
+            }
+        except Exception as e:
+            results["redis_info"] = {"error": str(e)}
+        
+        all_tests_passed = all(
+            test.get("success", False) 
+            for test in results["tests"].values()
+        )
+        
+        return {
+            "status": "success" if all_tests_passed else "partial",
+            "message": "All cache tests passed" if all_tests_passed else "Some cache tests failed",
+            "results": results
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Cache test failed: {str(e)}",
+            "results": results
+        }
 
 
 # ============================================
@@ -396,6 +491,95 @@ async def list_all_patients(
         ))
     
     return result
+
+
+@app.post("/api/v1/patients", response_model=PatientCreateResponse, tags=["Patients"])
+async def create_patient(
+    patient_data: PatientCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Create a new patient in FHIR via ProxyFHIR service.
+    Only admin and clinician can create patients.
+    """
+    # Check permissions
+    if current_user.role not in ["admin", "clinician"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin and clinician can create patients"
+        )
+    
+    # Ensure resourceType is Patient
+    patient_dict = patient_data.model_dump(exclude_none=True)
+    patient_dict["resourceType"] = "Patient"
+    
+    # Forward request to ProxyFHIR service
+    proxy_fhir_url = f"{settings.proxy_fhir_url}/api/fhir/proxy/Patient"
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                proxy_fhir_url,
+                json=patient_dict,
+                headers={"Content-Type": "application/fhir+json"}
+            )
+            
+            if response.status_code not in [200, 201]:
+                try:
+                    error_data = response.json()
+                    error_detail = error_data.get("detail") or error_data.get("message") or response.text or "Failed to create patient in FHIR"
+                except:
+                    error_detail = response.text or "Failed to create patient in FHIR"
+                
+                logger.error(
+                    "proxy_fhir_error",
+                    status_code=response.status_code,
+                    error=error_detail[:500]  # Truncate very long errors
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"ProxyFHIR service error: {error_detail[:500]}"
+                )
+            
+            try:
+                fhir_response = response.json()
+            except Exception as e:
+                logger.error("proxy_fhir_json_error", error=str(e), response_text=response.text[:200])
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Invalid JSON response from ProxyFHIR service"
+                )
+            
+            # Return simplified response
+            return PatientCreateResponse(
+                id=fhir_response.get("id", ""),
+                resourceType=fhir_response.get("resourceType", "Patient"),
+                status="created"
+            )
+    
+    except httpx.TimeoutException:
+        logger.error("proxy_fhir_timeout", url=proxy_fhir_url)
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="ProxyFHIR service timeout"
+        )
+    except httpx.RequestError as e:
+        logger.error("proxy_fhir_request_error", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"ProxyFHIR service unavailable: {str(e)}"
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        error_msg = str(e)
+        logger.error("create_patient_error", error=error_msg, error_type=type(e).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating patient: {error_msg}"
+        )
 
 
 @app.delete("/api/v1/patients/{patient_id}", tags=["Patients"])

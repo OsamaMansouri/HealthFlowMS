@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     model_service_url: str = "http://localhost:8084"
     featurizer_service_url: str = "http://localhost:8083"
     deid_service_url: str = "http://localhost:8082"
+    proxy_fhir_url: str = "http://proxy-fhir:8081"  # Internal Docker network URL
     
     # Rate limiting
     rate_limit_per_minute: int = 60

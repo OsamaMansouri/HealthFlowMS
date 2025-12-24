@@ -142,3 +142,25 @@ class HealthResponse(BaseModel):
     version: str
     dependencies: Dict[str, str]
 
+
+# Patient creation schema
+class PatientCreateRequest(BaseModel):
+    """FHIR Patient creation request."""
+    resourceType: str = "Patient"
+    name: List[Dict[str, Any]] = Field(..., description="Patient name(s)")
+    gender: Optional[str] = Field(None, description="Patient gender (male, female, other, unknown)")
+    birthDate: Optional[str] = Field(None, description="Patient birth date (YYYY-MM-DD)")
+    identifier: Optional[List[Dict[str, Any]]] = None
+    telecom: Optional[List[Dict[str, Any]]] = None
+    address: Optional[List[Dict[str, Any]]] = None
+    # Allow any other FHIR Patient fields
+    class Config:
+        extra = "allow"
+
+
+class PatientCreateResponse(BaseModel):
+    """Patient creation response."""
+    id: str
+    resourceType: str
+    status: str = "created"
+

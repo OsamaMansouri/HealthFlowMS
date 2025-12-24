@@ -1,11 +1,16 @@
 """Main FastAPI application for DeID service."""
 from datetime import datetime
 from typing import List
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response
+from fastapi.exceptions import RequestValidationError
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import structlog
+import os
 
 from app.config import get_settings
 from app.database import get_db, engine, Base
@@ -29,14 +34,85 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS middleware
+# Custom middleware to FORCE CORS headers on ALL responses
+# This runs AFTER all other middleware to ensure headers are always present
+class ForceCORSMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Handle preflight OPTIONS requests immediately
+        if request.method == "OPTIONS":
+            response = Response(status_code=200)
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+            response.headers["Access-Control-Max-Age"] = "600"
+            return response
+        
+        # Process the request
+        try:
+            response = await call_next(request)
+        except Exception as e:
+            # Even on exception, return a response with CORS headers
+            response = JSONResponse(
+                status_code=500,
+                content={"detail": str(e)},
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                    "Access-Control-Allow-Headers": "*",
+                }
+            )
+            return response
+        
+        # Force CORS headers on the response
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Expose-Headers"] = "*"
+        
+        return response
+
+# Add custom CORS middleware FIRST (runs LAST in the chain)
+app.add_middleware(ForceCORSMiddleware)
+
+# Standard CORS middleware as backup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+# Exception handlers - CORS middleware should handle headers automatically
+# But we add them manually as backup
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Custom exception handler to ensure CORS headers are always present."""
+    response = JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+    return response
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Custom validation exception handler to ensure CORS headers are always present."""
+    response = JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors()},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+    return response
 
 
 @app.on_event("startup")

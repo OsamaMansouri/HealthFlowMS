@@ -433,6 +433,20 @@ POST /api/fhir/proxy/Condition   # Créer condition (proxy)
 GET  /health                      # Healthcheck
 \end{lstlisting}
 
+\subsection{Améliorations Récentes}
+
+Le service ProxyFHIR a été récemment refactorisé et amélioré pour répondre aux exigences croissantes du système. Une nouvelle implémentation, développée dans le module \texttt{fhir-new}, remplace progressivement l'implémentation originale tout en conservant la compatibilité avec l'API existante. Cette refactorisation apporte plusieurs améliorations significatives.
+
+\textbf{Architecture améliorée} : La nouvelle implémentation utilise une architecture plus modulaire avec une séparation claire des responsabilités entre les contrôleurs (gestion des requêtes HTTP), les services (logique métier), et les repositories (accès aux données). Cette séparation améliore la maintenabilité du code et facilite les tests unitaires et d'intégration.
+
+\textbf{Gestion des entités FHIR} : Les entités JPA ont été améliorées pour mieux correspondre au schéma PostgreSQL existant, utilisant des UUID comme identifiants primaires et stockant les données FHIR complètes dans des colonnes JSON pour préserver toute l'information originale tout en permettant des requêtes efficaces sur les champs fréquemment utilisés.
+
+\textbf{Configuration CORS renforcée} : Le service inclut maintenant une configuration CORS complète permettant au frontend et aux autres services de communiquer sans restrictions, avec support explicite des requêtes preflight OPTIONS et gestion des headers CORS dans les réponses d'erreur.
+
+\textbf{Documentation API améliorée} : L'intégration de SpringDoc OpenAPI (Swagger) fournit une documentation interactive complète de l'API, permettant aux développeurs de tester facilement les endpoints et de comprendre la structure des requêtes et réponses.
+
+\textbf{Endpoints de test} : Des endpoints de test ont été ajoutés pour faciliter le débogage et la vérification de la connectivité entre les services, améliorant ainsi la facilité de développement et de maintenance.
+
 \newpage
 
 \section{DeID - Service d'Anonymisation}
@@ -475,6 +489,18 @@ POST /api/deid/patient           # Anonymiser un patient
 GET  /api/deid/patient/{id}       # Obtenir patient anonymisé
 GET  /health                     # Healthcheck
 \end{lstlisting}
+
+\subsection{Améliorations Récentes}
+
+Le service DeID a bénéficié de plusieurs améliorations critiques pour garantir sa fiabilité et sa conformité aux standards de sécurité web.
+
+\textbf{Configuration CORS robuste} : Une configuration CORS complète et robuste a été implémentée pour résoudre les problèmes de communication cross-origin entre le frontend et le service. Cette configuration inclut un middleware personnalisé qui garantit que les headers CORS sont présents sur toutes les réponses, y compris les réponses d'erreur et les requêtes preflight OPTIONS. Le middleware gère automatiquement les requêtes preflight en retournant immédiatement les headers CORS appropriés, permettant ainsi au navigateur de valider les requêtes avant leur envoi effectif.
+
+\textbf{Gestion des erreurs améliorée} : Les handlers d'exception personnalisés ont été améliorés pour garantir que toutes les réponses d'erreur incluent les headers CORS nécessaires, même en cas d'exception non gérée. Cette amélioration est cruciale car les navigateurs bloquent les réponses sans headers CORS valides, rendant les erreurs invisibles au frontend.
+
+\textbf{Correction du traitement des données JSON} : Un bug critique dans le traitement des données \texttt{resource\_data} stockées en format JSON dans PostgreSQL a été corrigé. Le service gère maintenant correctement les différents formats possibles (dictionnaire Python, chaîne JSON, ou autres structures) en détectant automatiquement le type et en appliquant la conversion appropriée. Cette correction garantit que l'anonymisation fonctionne correctement quelle que soit la façon dont les données sont stockées dans la base de données.
+
+\textbf{Validation des données renforcée} : La validation des données d'entrée a été renforcée avec des schémas Pydantic plus stricts, garantissant que seules les données valides sont traitées et réduisant ainsi les risques d'erreurs lors de l'anonymisation.
 
 \newpage
 
@@ -1386,6 +1412,42 @@ Les tests de performance mesurent plusieurs métriques critiques pour évaluer l
 
 Plusieurs scénarios de charge sont testés pour simuler différents niveaux d'utilisation. Le scénario de charge normale simule 50 utilisateurs simultanés effectuant des opérations typiques (consultation de dashboard, liste de patients, scores de risque). Le scénario de charge élevée teste 200 utilisateurs simultanés pour identifier les limites du système actuel. Le scénario de pic de charge simule 500 utilisateurs simultanés pour tester la résilience et la dégradation gracieuse. Enfin, le scénario de stress prolongé maintient une charge élevée pendant 30 minutes pour détecter les fuites mémoire et les problèmes de performance à long terme.
 
+\section{Tests Automatisés}
+
+Le système inclut maintenant une suite complète de tests automatisés utilisant \textbf{pytest}, le framework de test standard pour Python. Ces tests garantissent la qualité du code et permettent de détecter rapidement les régressions lors des modifications du système.
+
+\subsection{Framework de Test}
+
+\textbf{pytest 7.4.4} est utilisé comme framework principal pour les tests unitaires et d'intégration. Pytest offre une syntaxe simple et expressive pour écrire des tests, une découverte automatique des tests, et des rapports détaillés qui facilitent l'identification des problèmes. L'intégration avec \textbf{pytest-asyncio 0.23.3} permet de tester les fonctions asynchrones de FastAPI de manière efficace, garantissant que les endpoints API sont correctement testés dans un contexte asynchrone réaliste.
+
+\subsection{Structure des Tests}
+
+Les tests sont organisés dans le dossier \texttt{tests/} de chaque microservice, avec une séparation claire entre les tests unitaires (qui testent des fonctions individuelles) et les tests d'intégration (qui testent l'interaction entre les composants). Le fichier \texttt{conftest.py} définit les fixtures partagées qui sont utilisées par tous les tests, incluant la configuration de la base de données de test et la création de clients de test.
+
+\subsection{Tests d'Authentification}
+
+Les tests d'authentification vérifient que le système de login fonctionne correctement, incluant les cas de succès avec des credentials valides, les cas d'échec avec des credentials invalides, et la récupération de l'utilisateur courant avec un token JWT valide. Ces tests garantissent que la sécurité du système est maintenue et que les utilisateurs peuvent s'authentifier correctement.
+
+\subsection{Tests des Endpoints}
+
+Les tests des endpoints vérifient que tous les endpoints API fonctionnent correctement, retournent les réponses attendues, et gèrent correctement les cas d'erreur. Les tests utilisent le \texttt{TestClient} de FastAPI qui simule les requêtes HTTP sans nécessiter un serveur réel, permettant ainsi des tests rapides et fiables.
+
+\subsection{Exécution des Tests}
+
+Les tests peuvent être exécutés directement dans les conteneurs Docker où l'environnement de test est configuré :
+
+\begin{lstlisting}[language=bash, caption=Exécution des tests]
+# Dans le conteneur score-api
+docker exec healthflow-score-api pytest tests/ -v
+
+# Tests spécifiques
+docker exec healthflow-score-api pytest tests/test_auth.py -v
+
+# Utilisation des scripts PowerShell/CMD (depuis le dossier score-api)
+.\run_tests.ps1    # PowerShell
+.\run_tests.bat    # CMD
+\end{lstlisting}
+
 \newpage
 
 % ============================================
@@ -1454,30 +1516,28 @@ print('Tables creees avec succes')
 \textbf{Création des utilisateurs par défaut:}
 
 \begin{lstlisting}[language=bash, caption=Création des utilisateurs par défaut]
-docker exec healthflow-score-api python -c "
-import sys
-sys.path.insert(0, '/app')
-from app.database import SessionLocal
-from app.services import UserService
-
-db = SessionLocal()
-user_service = UserService(db)
-
-users = [
-    {'username': 'admin', 'password': 'admin123', 'role': 'admin', 'email': 'admin@healthflow.local', 'full_name': 'Administrator'},
-    {'username': 'clinician', 'password': 'admin123', 'role': 'clinician', 'email': 'clinician@healthflow.local', 'full_name': 'Clinical User'},
-    {'username': 'researcher', 'password': 'admin123', 'role': 'researcher', 'email': 'researcher@healthflow.local', 'full_name': 'Researcher'},
-    {'username': 'auditor', 'password': 'admin123', 'role': 'auditor', 'email': 'auditor@healthflow.local', 'full_name': 'Auditor'}
-]
-
-for u in users:
-    if not user_service.get_user_by_username(u['username']):
-        user_service.create_user(u['username'], u['email'], u['password'], u['full_name'], u['role'])
-        print(f'Utilisateur cree: {u[\"username\"]}')
-    else:
-        print(f'Utilisateur {u[\"username\"]} existe deja')
-"
+docker exec healthflow-score-api python database/init/create_default_users.py
 \end{lstlisting}
+
+\subsection{Infrastructure Additionnelle}
+
+Le système inclut maintenant plusieurs améliorations d'infrastructure qui améliorent la robustesse, les performances, et la maintenabilité du système.
+
+\subsubsection{Redis Cache}
+
+Un service \textbf{Redis 7} a été intégré pour fournir une couche de cache en mémoire qui améliore significativement les performances du système. Redis stocke temporairement les résultats de requêtes fréquentes et les calculs coûteux, réduisant ainsi la charge sur la base de données PostgreSQL et améliorant le temps de réponse pour les utilisateurs finaux.
+
+Le module \texttt{cache.py} dans le service score-api fournit des fonctions utilitaires pour utiliser Redis : \texttt{get\_cache()} pour récupérer des valeurs depuis le cache, \texttt{set\_cache()} pour stocker des valeurs avec une durée d'expiration configurable, \texttt{delete\_cache()} pour supprimer des clés du cache, et un décorateur \texttt{@cache\_result} pour mettre en cache automatiquement les résultats de fonctions. Cette intégration permet d'améliorer les performances des endpoints qui effectuent des calculs coûteux ou des requêtes de base de données complexes, comme les statistiques du dashboard ou les scores de risque calculés.
+
+Un endpoint de test du cache (\texttt{GET /api/v1/cache/test}) a été ajouté pour vérifier que Redis fonctionne correctement et que les opérations de cache (set, get, delete) s'exécutent sans erreur. Cet endpoint est utile pour le dépannage et la validation de la configuration Redis, permettant de détecter rapidement les problèmes de connectivité ou de configuration.
+
+\subsubsection{Sauvegarde Automatique}
+
+Un service de sauvegarde automatique a été configuré pour garantir la protection des données critiques de la base de données PostgreSQL. Le service \texttt{backup} dans \texttt{docker-compose.yml} effectue des sauvegardes quotidiennes de la base de données, compresse les fichiers de sauvegarde avec gzip, et nettoie automatiquement les sauvegardes de plus de 7 jours pour éviter l'accumulation excessive de données et préserver l'espace disque.
+
+Les sauvegardes sont stockées dans le dossier \texttt{database/backup/} avec un horodatage dans le nom de fichier (format : \texttt{healthflow-YYYYMMDD\_HHMMSS.sql.gz}), permettant ainsi de restaurer facilement la base de données à un point dans le temps spécifique. Des scripts manuels sont également disponibles (\texttt{backup.sh} pour Linux/Mac et \texttt{backup.ps1} pour Windows) pour effectuer des sauvegardes à la demande en cas de besoin, offrant ainsi une flexibilité supplémentaire pour les administrateurs système.
+
+Cette automatisation de la sauvegarde est essentielle pour garantir la continuité des opérations et la récupération en cas de perte de données, qu'elle soit due à une erreur humaine, une corruption de données, ou un incident matériel. La rétention de 7 jours permet d'avoir une fenêtre de récupération raisonnable tout en limitant l'utilisation de l'espace disque.
 
 \subsection{Vérification}
 
@@ -1823,11 +1883,16 @@ Le code source complet du projet, incluant tous les microservices, la documentat
 HealthFlowMS/
 ├── database/
 │   └── init/
-│       └── 01_schema.sql
-├── proxy-fhir/
+│       ├── init_database.py
+│       └── create_default_users.py
+├── fhir-new/
 │   └── src/main/java/...
+│       └── (Service ProxyFHIR refactorisé)
 ├── deid/
 │   └── app/
+│       ├── main.py
+│       ├── deid_service.py
+│       └── config.py
 ├── featurizer/
 │   └── app/
 ├── model-risque/
@@ -1839,7 +1904,8 @@ HealthFlowMS/
 ├── frontend/
 │   └── src/
 ├── docker-compose.yml
-└── README.md
+├── README.md
+└── Rapport.tex
 \end{lstlisting}
 
 \chapter{Références}

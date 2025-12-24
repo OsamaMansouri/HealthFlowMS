@@ -1,0 +1,66 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: fhir-new
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/healthflow}
+    username: ${SPRING_DATASOURCE_USERNAME:healthflow}
+    password: ${SPRING_DATASOURCE_PASSWORD:healthflow123}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+# FHIR Server Configuration
+fhir:
+  server:
+    url: ${FHIR_SERVER_URL:http://localhost:8090/fhir}
+    connection-timeout: 30000
+    socket-timeout: 60000
+
+  sync:
+    enabled: true
+    cron: "0 */15 * * * *" # Every 15 minutes
+    batch-size: 100
+    resources:
+      - Patient
+      - Encounter
+      - Condition
+      - Observation
+      - MedicationRequest
+      - Procedure
+      - DiagnosticReport
+      - DocumentReference
+
+# OpenAPI / Swagger
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  show-actuator: false
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.healthflow.fhirnew: DEBUG
+    org.springframework.web: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
