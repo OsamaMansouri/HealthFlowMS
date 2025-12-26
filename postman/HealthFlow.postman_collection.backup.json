@@ -1,0 +1,1181 @@
+{
+	"info": {
+		"_postman_id": "a59a956e-c857-433f-a2be-51d4a55c5457",
+		"name": "HealthFlow",
+		"description": "Collection complète pour tester tous les microservices HealthFlow-MS\n\n## Services:\n- ScoreAPI (8085) - API principale\n- HAPI FHIR (8090) - Serveur FHIR\n- ProxyFHIR (8081) - Synchronisation FHIR\n- DeID (8082) - Anonymisation\n- Featurizer (8083) - Extraction features\n- ModelRisque (8084) - Prédictions ML\n- AuditFairness (8086) - Dashboard équité\n\n## Utilisateurs:\n- admin / admin123\n- clinician / admin123\n- researcher / admin123\n- auditor / admin123",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "6565244"
+	},
+	"item": [
+		{
+			"name": "1. Authentication (ScoreAPI:8085)",
+			"item": [
+				{
+					"name": "1.1 Login - Get Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('token', jsonData.access_token);",
+									"    console.log('Token saved!');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"admin\",\n    \"password\": \"admin123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}:8085/api/v1/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8085",
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						},
+						"description": "Authentification - Obtenir un token JWT\n\nUtilisateurs disponibles:\n- admin / admin123\n- clinician / admin123\n- researcher / admin123\n- auditor / admin123"
+					},
+					"response": []
+				},
+				{
+					"name": "1.2 Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}:8085/api/v1/auth/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8085",
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"me"
+							]
+						},
+						"description": "Récupérer les informations de l'utilisateur connecté"
+					},
+					"response": []
+				},
+				{
+					"name": "1.3 Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8085/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8085",
+							"path": [
+								"health"
+							]
+						},
+						"description": "Vérifier que le service ScoreAPI est opérationnel"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. HAPI FHIR Server (8090)",
+			"item": [
+				{
+					"name": "2.1 Get FHIR Metadata",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8090/fhir/metadata",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8090",
+							"path": [
+								"fhir",
+								"metadata"
+							]
+						},
+						"description": "Récupérer les capacités du serveur FHIR (CapabilityStatement)"
+					},
+					"response": []
+				},
+				{
+					"name": "2.2 Create Patient",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('patient_fhir_id', jsonData.id);",
+									"    console.log('Patient ID saved: ' + jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/fhir+json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"resourceType\": \"Patient\",\n    \"name\": [\n        {\n            \"family\": \"Dupont\",\n            \"given\": [\"Jean\", \"Pierre\"]\n        }\n    ],\n    \"gender\": \"male\",\n    \"birthDate\": \"1965-03-15\",\n    \"address\": [\n        {\n            \"city\": \"Paris\",\n            \"country\": \"France\"\n        }\n    ],\n    \"telecom\": [\n        {\n            \"system\": \"phone\",\n            \"value\": \"+33612345678\"\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}:8090/fhir/Patient",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8090",
+							"path": [
+								"fhir",
+								"Patient"
+							]
+						},
+						"description": "Créer un nouveau patient dans le serveur FHIR"
+					},
+					"response": []
+				},
+				{
+					"name": "2.3 Get All Patients",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8090/fhir/Patient",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8090",
+							"path": [
+								"fhir",
+								"Patient"
+							]
+						},
+						"description": "Récupérer tous les patients du serveur FHIR"
+					},
+					"response": []
+				},
+				{
+					"name": "2.4 Get Patient by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8090/fhir/Patient/{{patient_fhir_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8090",
+							"path": [
+								"fhir",
+								"Patient",
+								"{{patient_fhir_id}}"
+							]
+						},
+						"description": "Récupérer un patient spécifique par son ID FHIR"
+					},
+					"response": []
+				},
+				{
+					"name": "2.5 Create Encounter (Hospitalisation)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/fhir+json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"resourceType\": \"Encounter\",\n    \"status\": \"finished\",\n    \"class\": {\n        \"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActCode\",\n        \"code\": \"IMP\",\n        \"display\": \"inpatient encounter\"\n    },\n    \"subject\": {\n        \"reference\": \"Patient/{{patient_fhir_id}}\"\n    },\n    \"period\": {\n        \"start\": \"2024-01-15T08:00:00Z\",\n        \"end\": \"2024-01-20T14:00:00Z\"\n    },\n    \"reasonCode\": [\n        {\n            \"coding\": [\n                {\n                    \"system\": \"http://snomed.info/sct\",\n                    \"code\": \"22298006\",\n                    \"display\": \"Myocardial infarction\"\n                }\n            ]\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}:8090/fhir/Encounter",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8090",
+							"path": [
+								"fhir",
+								"Encounter"
+							]
+						},
+						"description": "Créer une hospitalisation pour un patient"
+					},
+					"response": []
+				},
+				{
+					"name": "2.6 Create Condition (Diagnostic)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/fhir+json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"resourceType\": \"Condition\",\n    \"clinicalStatus\": {\n        \"coding\": [\n            {\n                \"system\": \"http://terminology.hl7.org/CodeSystem/condition-clinical\",\n                \"code\": \"active\"\n            }\n        ]\n    },\n    \"code\": {\n        \"coding\": [\n            {\n                \"system\": \"http://hl7.org/fhir/sid/icd-10\",\n                \"code\": \"E11\",\n                \"display\": \"Type 2 diabetes mellitus\"\n            }\n        ]\n    },\n    \"subject\": {\n        \"reference\": \"Patient/{{patient_fhir_id}}\"\n    },\n    \"onsetDateTime\": \"2020-05-01\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}:8090/fhir/Condition",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8090",
+							"path": [
+								"fhir",
+								"Condition"
+							]
+						},
+						"description": "Créer un diagnostic (condition médicale) pour un patient"
+					},
+					"response": []
+				},
+				{
+					"name": "2.7 Create Observation (Signe Vital)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/fhir+json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"resourceType\": \"Observation\",\n    \"status\": \"final\",\n    \"category\": [\n        {\n            \"coding\": [\n                {\n                    \"system\": \"http://terminology.hl7.org/CodeSystem/observation-category\",\n                    \"code\": \"vital-signs\"\n                }\n            ]\n        }\n    ],\n    \"code\": {\n        \"coding\": [\n            {\n                \"system\": \"http://loinc.org\",\n                \"code\": \"8867-4\",\n                \"display\": \"Heart rate\"\n            }\n        ]\n    },\n    \"subject\": {\n        \"reference\": \"Patient/{{patient_fhir_id}}\"\n    },\n    \"effectiveDateTime\": \"2024-01-15T10:00:00Z\",\n    \"valueQuantity\": {\n        \"value\": 85,\n        \"unit\": \"beats/minute\",\n        \"system\": \"http://unitsofmeasure.org\",\n        \"code\": \"/min\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}:8090/fhir/Observation",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8090",
+							"path": [
+								"fhir",
+								"Observation"
+							]
+						},
+						"description": "Créer une observation (signe vital, labo) pour un patient"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "3. ProxyFHIR (8081)",
+			"item": [
+				{
+					"name": "3.1 Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8081/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8081",
+							"path": [
+								"health"
+							]
+						},
+						"description": "Vérifier que ProxyFHIR est opérationnel"
+					},
+					"response": []
+				},
+				{
+					"name": "3.2 Sync FHIR Data",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8081/api/fhir/sync",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"fhir",
+								"sync"
+							]
+						},
+						"description": "Synchroniser les données depuis HAPI FHIR vers PostgreSQL"
+					},
+					"response": []
+				},
+				{
+					"name": "3.3 Get Synced Patients",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8081/api/fhir/patients",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"fhir",
+								"patients"
+							]
+						},
+						"description": "Récupérer les patients synchronisés en base"
+					},
+					"response": []
+				},
+				{
+					"name": "3.4 Get Sync Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8081/api/fhir/stats",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"fhir",
+								"stats"
+							]
+						},
+						"description": "Statistiques de synchronisation"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "DeID - Anonymisation (8082)",
+			"item": [
+				{
+					"name": "4.1 Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8082/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8082",
+							"path": [
+								"health"
+							]
+						},
+						"description": "Vérifier que DeID est opérationnel"
+					},
+					"response": []
+				},
+				{
+					"name": "4.2 Anonymize Patient",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.pseudo_id) {",
+									"        pm.collectionVariables.set('pseudo_patient_id', jsonData.pseudo_id);",
+									"        console.log('Pseudo ID saved: ' + jsonData.pseudo_id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"patient_fhir_id\": \"{{patient_fhir_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}:8082/api/deid/patient",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8082",
+							"path": [
+								"api",
+								"deid",
+								"patient"
+							]
+						},
+						"description": "Anonymiser un patient (HIPAA Safe Harbor)"
+					},
+					"response": []
+				},
+				{
+					"name": "4.3 Get Anonymized Patients",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8082/api/deid/patients",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8082",
+							"path": [
+								"api",
+								"deid",
+								"patients"
+							]
+						},
+						"description": "Récupérer tous les patients anonymisés"
+					},
+					"response": []
+				},
+				{
+					"name": "4.4 Get DeID Audit Log",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8082/api/deid/audit",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8082",
+							"path": [
+								"api",
+								"deid",
+								"audit"
+							]
+						},
+						"description": "Historique des opérations d'anonymisation"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "5. Featurizer (8083)",
+			"item": [
+				{
+					"name": "5.1 Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8083/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8083",
+							"path": [
+								"health"
+							]
+						},
+						"description": "Vérifier que Featurizer est opérationnel"
+					},
+					"response": []
+				},
+				{
+					"name": "5.2 Extract Features",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"pseudo_patient_id\": \"{{pseudo_patient_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}:8083/api/features/extract",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8083",
+							"path": [
+								"api",
+								"features",
+								"extract"
+							]
+						},
+						"description": "Extraire les 30+ features ML d'un patient anonymisé"
+					},
+					"response": []
+				},
+				{
+					"name": "5.3 Get Patient Features",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8083/api/features/{{pseudo_patient_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8083",
+							"path": [
+								"api",
+								"features",
+								"{{pseudo_patient_id}}"
+							]
+						},
+						"description": "Récupérer les features d'un patient"
+					},
+					"response": []
+				},
+				{
+					"name": "5.4 Analyze Text with NLP",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"text\": \"Patient diabétique de 58 ans présentant une hypertension artérielle et des signes d'anxiété. Antécédent d'infarctus du myocarde en 2020.\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}:8083/api/nlp/analyze",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8083",
+							"path": [
+								"api",
+								"nlp",
+								"analyze"
+							]
+						},
+						"description": "Analyser un texte clinique avec BioBERT/spaCy"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "ModelRisque - ML (8084)",
+			"item": [
+				{
+					"name": "6.1 Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8084/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8084",
+							"path": [
+								"health"
+							]
+						},
+						"description": "Vérifier que ModelRisque est opérationnel"
+					},
+					"response": []
+				},
+				{
+					"name": "6.2 Get Model Info",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8084/api/model/info",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8084",
+							"path": [
+								"api",
+								"model",
+								"info"
+							]
+						},
+						"description": "Informations sur le modèle XGBoost actif"
+					},
+					"response": []
+				},
+				{
+					"name": "6.3 Predict Risk Score",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"pseudo_patient_id\": \"{{pseudo_patient_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}:8084/api/predict",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8084",
+							"path": [
+								"api",
+								"predict"
+							]
+						},
+						"description": "Calculer le score de risque de réadmission (0-1)"
+					},
+					"response": []
+				},
+				{
+					"name": "6.4 Get SHAP Explanation",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8084/api/explain/{{pseudo_patient_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8084",
+							"path": [
+								"api",
+								"explain",
+								"{{pseudo_patient_id}}"
+							]
+						},
+						"description": "Explication SHAP de la prédiction"
+					},
+					"response": []
+				},
+				{
+					"name": "6.5 Get High Risk Patients",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8084/api/high-risk",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8084",
+							"path": [
+								"api",
+								"high-risk"
+							]
+						},
+						"description": "Liste des patients à haut risque (score > 0.7)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "ScoreAPI - Endpoints (8085)",
+			"item": [
+				{
+					"name": "7.1 Dashboard Stats",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}:8085/api/v1/dashboard/stats",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8085",
+							"path": [
+								"api",
+								"v1",
+								"dashboard",
+								"stats"
+							]
+						},
+						"description": "Statistiques globales du dashboard"
+					},
+					"response": []
+				},
+				{
+					"name": "7.2 Get Patient Risk Score",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}:8085/api/v1/patients/{{pseudo_patient_id}}/risk-score",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8085",
+							"path": [
+								"api",
+								"v1",
+								"patients",
+								"{{pseudo_patient_id}}",
+								"risk-score"
+							]
+						},
+						"description": "Score de risque d'un patient spécifique"
+					},
+					"response": []
+				},
+				{
+					"name": "7.3 Get All High Risk Patients",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}:8085/api/v1/patients/high-risk",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8085",
+							"path": [
+								"api",
+								"v1",
+								"patients",
+								"high-risk"
+							]
+						},
+						"description": "Tous les patients à haut risque"
+					},
+					"response": []
+				},
+				{
+					"name": "7.4 Get Audit Logs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}:8085/api/v1/audit/logs",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8085",
+							"path": [
+								"api",
+								"v1",
+								"audit",
+								"logs"
+							]
+						},
+						"description": "Historique des accès API"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "8. AuditFairness Dashboard (8086)",
+			"item": [
+				{
+					"name": "8.1 Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8086/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8086",
+							"path": [
+								"health"
+							]
+						},
+						"description": "Vérifier que AuditFairness est opérationnel"
+					},
+					"response": []
+				},
+				{
+					"name": "8.2 Get Fairness Metrics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8086/api/fairness/metrics",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8086",
+							"path": [
+								"api",
+								"fairness",
+								"metrics"
+							]
+						},
+						"description": "Métriques d'équité du modèle"
+					},
+					"response": []
+				},
+				{
+					"name": "8.3 Get Bias Alerts",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8086/api/fairness/alerts",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8086",
+							"path": [
+								"api",
+								"fairness",
+								"alerts"
+							]
+						},
+						"description": "Alertes de biais détectées"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "9. Complete Workflow Test",
+			"item": [
+				{
+					"name": "Step 1: Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('token', jsonData.access_token);",
+									"    console.log('✅ Step 1: Login successful');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"admin\",\n    \"password\": \"admin123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}:8085/api/v1/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8085",
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Step 2: Create Patient in FHIR",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('patient_fhir_id', jsonData.id);",
+									"    console.log('✅ Step 2: Patient created with ID: ' + jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/fhir+json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"resourceType\": \"Patient\",\n    \"name\": [{\"family\": \"TestWorkflow\", \"given\": [\"Patient\"]}],\n    \"gender\": \"male\",\n    \"birthDate\": \"1960-05-20\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}:8090/fhir/Patient",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8090",
+							"path": [
+								"fhir",
+								"Patient"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Step 3: Sync FHIR to DB",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"console.log('✅ Step 3: FHIR data synced to PostgreSQL');"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}:8081/api/fhir/sync",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"fhir",
+								"sync"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Step 4: Anonymize Patient",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.pseudo_id) {",
+									"        pm.collectionVariables.set('pseudo_patient_id', jsonData.pseudo_id);",
+									"        console.log('✅ Step 4: Patient anonymized with pseudo ID: ' + jsonData.pseudo_id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"patient_fhir_id\": \"{{patient_fhir_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}:8082/api/deid/patient",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8082",
+							"path": [
+								"api",
+								"deid",
+								"patient"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Step 5: Extract Features",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"console.log('✅ Step 5: Features extracted');"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"pseudo_patient_id\": \"{{pseudo_patient_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}:8083/api/features/extract",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8083",
+							"path": [
+								"api",
+								"features",
+								"extract"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Step 6: Predict Risk Score",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    console.log('✅ Step 6: Risk predicted!');",
+									"    console.log('   Score: ' + jsonData.risk_score);",
+									"    console.log('   Level: ' + jsonData.risk_level);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"pseudo_patient_id\": \"{{pseudo_patient_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}:8084/api/predict",
+							"host": [
+								"{{base_url}}"
+							],
+							"port": "8084",
+							"path": [
+								"api",
+								"predict"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "patient_fhir_id",
+			"value": "TEST-001",
+			"type": "string"
+		},
+		{
+			"key": "pseudo_patient_id",
+			"value": "DEID-XXXXX",
+			"type": "string"
+		}
+	]
+}

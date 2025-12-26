@@ -16,6 +16,7 @@ from app.schemas import (
     ModelMetrics, PredictionStats, HealthResponse, RiskFactor
 )
 from app.model_service import ModelService, get_model
+from prometheus_fastapi_instrumentator import Instrumentator
 
 settings = get_settings()
 logger = structlog.get_logger()
@@ -28,6 +29,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Initialize Prometheus metrics BEFORE middlewares
+Instrumentator().instrument(app).expose(app)
 
 # CORS middleware
 app.add_middleware(
@@ -43,6 +47,7 @@ app.add_middleware(
 async def startup_event():
     """Initialize on startup."""
     logger.info("Starting ModelRisque service", port=settings.service_port)
+
     # Pre-load model
     try:
         model = get_model()

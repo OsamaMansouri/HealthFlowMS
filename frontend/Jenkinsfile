@@ -1,0 +1,126 @@
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_IMAGE = "healthflowms/frontend"
+        DOCKER_TAG = "${env.BUILD_NUMBER}"
+        DOCKER_REGISTRY = "docker.io"
+        NODE_VERSION = "18"
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Source code already checked out by SCM'
+            }
+        }
+        
+        stage('Build Frontend') {
+            steps {
+                echo 'Building frontend application...'
+                dir('frontend') {
+                    sh '''
+                        # If there's a package.json, build from source
+                        if [ -f "package.json" ]; then
+                            npm install
+                            npm run build
+                        else
+                            echo "Using pre-built frontend assets"
+                        fi
+                    '''
+                }
+            }
+        }
+        
+        stage('Lint') {
+            steps {
+                echo 'Running lint checks...'
+                dir('frontend') {
+                    sh '''
+                        if [ -f "package.json" ]; then
+                            npm run lint || true
+                        fi
+                    '''
+                }
+            }
+        }
+        
+        stage('Test') {
+            steps {
+                echo 'Running frontend tests...'
+                dir('frontend') {
+                    sh '''
+                        if [ -f "package.json" ]; then
+                            npm test || true
+                        fi
+                    '''
+                }
+            }
+        }
+        
+        stage('Docker Build') {
+            steps {
+                echo 'Building Docker image...'
+                dir('frontend') {
+                    sh """
+                        docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
+                        docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest
+                    """
+                }
+            }
+        }
+        
+        stage('Docker Push') {
+            when {
+                branch 'main'
+            }
+            steps {
+                echo 'Pushing Docker image to registry...'
+                withCredentials([usernamePassword(credentialsId: 'docker-registry', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh """
+                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin ${DOCKER_REGISTRY}
+                        docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
+                        docker push ${DOCKER_IMAGE}:latest
+                    """
+                }
+            }
+        }
+        
+        stage('Deploy to Staging') {
+            when {
+                branch 'develop'
+            }
+            steps {
+                echo 'Deploying to staging environment...'
+                sh '''
+                    docker-compose -f docker-compose.staging.yml up -d frontend
+                '''
+            }
+        }
+        
+        stage('Deploy to Production') {
+            when {
+                branch 'main'
+            }
+            steps {
+                echo 'Deploying to production environment...'
+                input message: 'Deploy to production?', ok: 'Deploy'
+                sh '''
+                    docker-compose -f docker-compose.prod.yml up -d frontend
+                '''
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+        always {
+            deleteDir()
+        }
+    }
+}

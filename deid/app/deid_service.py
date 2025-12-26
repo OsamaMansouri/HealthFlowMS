@@ -5,6 +5,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Tuple
 from faker import Faker
+from dateutil.parser import parse as parse_date
 from sqlalchemy.orm import Session
 import structlog
 
@@ -41,9 +42,24 @@ class DeIdentificationService:
         hash_object = hashlib.sha256(combined.encode())
         return f"DEID-{hash_object.hexdigest()[:16].upper()}"
     
-    def calculate_age_group(self, birth_date: datetime) -> str:
-        """Calculate age group from birth date."""
+    def calculate_age_group(self, birth_date) -> str:
+        """Calculate age group from birth date (accepts datetime or string)."""
         if not birth_date:
+            return "unknown"
+        
+        # Parse if string
+        if isinstance(birth_date, str):
+            try:
+                birth_date = parse_date(birth_date)
+            except Exception as e:
+                logger.warning("Failed to parse birth_date in calculate_age_group",
+                             value=birth_date, error=str(e))
+                return "unknown"
+        
+        # Ensure it's a datetime object now
+        if not hasattr(birth_date, 'year'):
+            logger.warning("birth_date is not datetime after parsing",
+                         type=type(birth_date).__name__)
             return "unknown"
         
         today = datetime.now()
@@ -124,12 +140,33 @@ class DeIdentificationService:
                 deid_data[key] = value
         
         # Modify/generalize fields
-        birth_date = fhir_patient.birth_date
+        # Parse birth_date if it's a string
+        birth_date = None
+        if fhir_patient.birth_date:
+            if isinstance(fhir_patient.birth_date, str):
+                try:
+                    birth_date = parse_date(fhir_patient.birth_date)
+                    logger.debug("Parsed birth_date from string", 
+                               original=fhir_patient.birth_date,
+                               parsed=birth_date)
+                except Exception as e:
+                    logger.warning("Failed to parse birth_date", 
+                                 value=fhir_patient.birth_date,
+                                 error=str(e))
+                    birth_date = None
+            elif hasattr(fhir_patient.birth_date, 'year'):
+                # Already a datetime object
+                birth_date = fhir_patient.birth_date
+            else:
+                logger.warning("birth_date is unexpected type",
+                             type=type(fhir_patient.birth_date).__name__)
+                birth_date = None
+        
         age_group = self.calculate_age_group(birth_date) if birth_date else "unknown"
         
         if "birthDate" in deid_data:
             # Replace exact birth date with year only (if age > 89, use 90+)
-            if birth_date:
+            if birth_date and hasattr(birth_date, 'year'):
                 year = birth_date.year
                 age = datetime.now().year - year
                 if age > 89:

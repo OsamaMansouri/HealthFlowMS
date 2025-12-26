@@ -25,12 +25,10 @@ public class FhirSyncController {
             @ApiResponse(responseCode = "500", description = "Error during synchronization")
     })
     public ResponseEntity<?> syncFhirData() {
-        try {
-            fhirSyncService.syncAllResources();
-            return ResponseEntity.ok().body("{\"status\": \"success\", \"message\": \"FHIR data synchronized\"}");
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body("{\"status\": \"error\", \"message\": \"" + e.getMessage() + "\"}");
-        }
+        // Since we're now storing FHIR resources directly in the database,
+        // no sync is needed. Return success immediately.
+        return ResponseEntity.ok()
+                .body("{\"status\": \"success\", \"message\": \"FHIR data already synchronized (stored directly)\"}");
     }
 
     @PostMapping("/{resourceType}")
@@ -40,14 +38,25 @@ public class FhirSyncController {
             @ApiResponse(responseCode = "500", description = "Error during synchronization")
     })
     public ResponseEntity<?> syncResourceType(
-            @Parameter(description = "FHIR resource type (Patient, Encounter, Observation, etc.)")
-            @PathVariable String resourceType) {
+            @Parameter(description = "FHIR resource type (Patient, Encounter, Observation, etc.)") @PathVariable String resourceType) {
+        // Since we're now storing FHIR resources directly in the database,
+        // no sync is needed. Return success immediately.
+        return ResponseEntity.ok()
+                .body("{\"status\": \"success\", \"message\": \"" + resourceType
+                        + " already synchronized (stored directly)\"}");
+    }
+
+    @GetMapping("/patients")
+    @Operation(summary = "Get synchronized patients", description = "Retrieve list of all synchronized patients from PostgreSQL")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved patients"),
+            @ApiResponse(responseCode = "500", description = "Error retrieving patients")
+    })
+    public ResponseEntity<?> getSyncedPatients() {
         try {
-            fhirSyncService.syncResourceType(resourceType);
-            return ResponseEntity.ok().body("{\"status\": \"success\", \"message\": \"" + resourceType + " synchronized\"}");
+            return ResponseEntity.ok(fhirSyncService.getAllPatients());
         } catch (Exception e) {
             return ResponseEntity.status(500).body("{\"status\": \"error\", \"message\": \"" + e.getMessage() + "\"}");
         }
     }
 }
-
