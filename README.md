@@ -1448,6 +1448,6 @@ git push origin feature/amazing-feature
 
 **HealthFlowMS** - Transforming healthcare through AI-powered risk prediction 🏥
 
-Made with ❤️ by the HealthFlow Team
+Made with ❤️ by the Dark Team
 
 </div>
