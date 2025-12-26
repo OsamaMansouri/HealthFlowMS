@@ -18,11 +18,15 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python
+# Install Python and pip
 RUN apt-get update && \
-    apt-get install -y python3 python3-pip && \
+    apt-get install -y python3 python3-pip python3-venv && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Install docker-compose
+RUN curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && \
+    chmod +x /usr/local/bin/docker-compose
 
 USER jenkins
 
@@ -33,4 +37,19 @@ RUN jenkins-plugin-cli --plugins \
     pipeline-stage-view \
     blueocean \
     credentials-binding \
-    workflow-aggregator
+    workflow-aggregator \
+    configuration-as-code \
+    job-dsl \
+    github-branch-source \
+    pipeline-multibranch-defaults \
+    email-ext \
+    slack
+
+# Skip initial setup wizard
+ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"
+
+# Copy JCasC configuration
+COPY --chown=jenkins:jenkins casc.yaml /var/jenkins_home/casc.yaml
+
+# Set JCasC configuration path
+ENV CASC_JENKINS_CONFIG=/var/jenkins_home/casc.yaml
