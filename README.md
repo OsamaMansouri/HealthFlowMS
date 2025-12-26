@@ -20,6 +20,12 @@
   - [System Diagram](#system-architecture-diagram)
   - [Data Flow](#data-flow-diagram)
   - [Technology Stack](#technology-stack)
+- [BPMN Process Diagrams](#-bpmn-process-diagrams)
+  - [Patient Registration Workflow](#1-patient-registration-workflow)
+  - [Risk Prediction Workflow](#2-risk-prediction-workflow)
+  - [Data Anonymization Process](#3-data-anonymization-process-hipaa-safe-harbor)
+  - [Feature Extraction & NLP Process](#4-feature-extraction--nlp-process)
+  - [CI/CD Deployment Process](#5-cicd-deployment-process-jenkins)
 - [Quick Start](#-quick-start)
 - [Service Endpoints](#-service-endpoints)
 - [Complete Workflow](#-complete-workflow)
@@ -245,6 +251,148 @@ sequenceDiagram
 - **Prometheus** (Metrics collection)
 - **Grafana** (Visualization)
 - **Jenkins** (CI/CD)
+
+---
+
+## 🔄 BPMN Process Diagrams
+
+Business Process Model and Notation (BPMN) diagrams illustrating the key workflows in HealthFlowMS.
+
+### 1. Patient Registration Workflow
+
+![Patient Registration BPMN](docs/images/bpmn_patient_registration.png)
+
+**Process Overview:**
+
+This diagram illustrates the complete process for registering a new patient in the HealthFlowMS system:
+
+1. **User initiates registration** through the frontend interface
+2. **Patient information form** is filled with demographic and basic health data
+3. **Data validation** ensures all required fields are complete and properly formatted
+4. **Validation gateway** checks data integrity:
+   - ❌ **Invalid data** → User returns to form to correct errors
+   - ✅ **Valid data** → Process continues
+5. **FHIR Patient Resource** is created via the Proxy FHIR service (Spring Boot)
+6. **Storage in HAPI FHIR Server** ensures FHIR R4 standard compliance
+7. **Synchronization to PostgreSQL** database for fast querying and analytics
+8. **Success** → Patient is now registered and ready for clinical data entry
+
+---
+
+### 2. Risk Prediction Workflow
+
+![Risk Prediction BPMN](docs/images/bpmn_risk_prediction.png)
+
+**Process Overview:**
+
+This end-to-end workflow demonstrates how HealthFlowMS predicts hospital readmission risk:
+
+1. **User requests risk prediction** for a specific patient
+2. **Patient data retrieval** from PostgreSQL database
+3. **Data anonymization** via DeID service (HIPAA Safe Harbor compliance - 18 identifiers removed/modified)
+4. **Feature extraction** by Featurizer service (30+ clinical features)
+5. **NLP analysis** using BioBERT and spaCy on clinical notes to extract semantic information
+6. **Risk prediction** using XGBoost machine learning model
+7. **SHAP explanation generation** for interpretable AI - shows which factors contributed to the risk score
+8. **Results storage** in database for audit trail
+9. **Risk level assessment**:
+   - 🔴 **High risk (≥ 0.7)** → Alert clinical staff for immediate intervention
+   - 🟢 **Low/Medium risk (< 0.7)** → Standard notification
+10. **Display results** to user with risk level, score, and top contributing factors
+
+---
+
+### 3. Data Anonymization Process (HIPAA Safe Harbor)
+
+![Data Anonymization BPMN](docs/images/bpmn_anonymization.png)
+
+**Process Overview:**
+
+This diagram shows the HIPAA Safe Harbor compliant de-identification process:
+
+1. **Receive patient data** requiring anonymization
+2. **Load FHIR data** from database
+3. **Parallel processing** of 18 HIPAA identifiers (as per Safe Harbor method):
+   - Remove/hash patient names
+   - Generalize dates (keep year only, shift by random offset)
+   - Remove contact information (phone, email, fax)
+   - Remove unique identifiers (SSN, MRN, account numbers)
+   - Generalize geographic data (state level only, no cities/zip codes)
+   - Generalize ages (>89 years → "90+", children in age groups)
+4. **Convergence** after all identifiers processed
+5. **Create mapping** between original patient ID and pseudo-patient ID
+6. **Store anonymized data** for ML training and research
+7. **Audit log creation** for compliance tracking
+8. **Completion** → Anonymized data ready for use
+
+---
+
+### 4. Feature Extraction & NLP Process
+
+![Feature Extraction BPMN](docs/images/bpmn_feature_extraction.png)
+
+**Process Overview:**
+
+This workflow demonstrates how HealthFlowMS extracts 30+ clinical features for ML prediction:
+
+1. **Receive patient data** for feature extraction
+2. **Parallel feature extraction** across four categories:
+   
+   **a) Demographic Features Subprocess:**
+   - Age, gender, race, ethnicity
+   
+   **b) Clinical Features Subprocess:**
+   - Vital signs (heart rate, blood pressure, temperature, SpO2)
+   - Laboratory results (hemoglobin, creatinine, glucose, electrolytes)
+   - Length of stay, admission type
+   
+   **c) Comorbidity Indices Subprocess:**
+   - Charlson Comorbidity Index
+   - Elixhauser Comorbidity Score
+   
+   **d) NLP Analysis Subprocess:**
+   - Load BioBERT pre-trained model
+   - Extract medical entities (diseases, medications, procedures)
+   - Calculate sentiment and urgency scores from clinical notes
+   - Count entity types for complexity assessment
+
+3. **Feature convergence** after all parallel processes complete
+4. **Combine features** into a single feature vector (30+ dimensions)
+5. **Feature validation** ensures completeness:
+   - ❌ **Missing features** → Apply imputation or default values
+   - ✅ **Complete** → Continue
+6. **Completion** → Features ready for XGBoost model
+
+---
+
+### 5. CI/CD Deployment Process (Jenkins)
+
+![CI/CD Pipeline BPMN](docs/images/bpmn_cicd.png)
+
+**Process Overview:**
+
+This diagram illustrates the automated Jenkins CI/CD pipeline:
+
+1. **Code commit** to GitHub repository (develop or main branch)
+2. **Jenkins pipeline triggered** automatically via webhook
+3. **Code checkout** from Git repository
+4. **Parallel build process**:
+   - **Java services:** Maven clean package (Proxy FHIR)
+   - **Python services:** pip install requirements (All FastAPI services)
+5. **Build convergence** after all services built
+6. **Parallel testing**:
+   - **JUnit tests** for Java services
+   - **pytest tests** for Python services (score-api, deid, featurizer, model-risque)
+7. **Test convergence** after all tests complete
+8. **Test result gateway**:
+   - ❌ **Tests failed** → Build fails, notify developers
+   - ✅ **Tests passed** → Continue deployment
+9. **Build Docker images** for all services
+10. **Tag Docker images** with version and commit hash
+11. **Branch-based deployment**:
+    - **develop branch** → Deploy to staging environment for QA testing
+    - **main branch** → Deploy to production environment
+12. **Success** → All services deployed and running
 
 ---
 
