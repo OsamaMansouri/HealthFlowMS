@@ -25,6 +25,7 @@
 - [Complete Workflow](#-complete-workflow)
 - [Machine Learning](#-machine-learning)
 - [Testing](#-testing)
+- [Code Quality (SonarQube)](#-code-quality-sonarqube)
 - [Monitoring & Observability](#-monitoring--observability)
 - [CI/CD Pipeline](#-cicd-pipeline)
 - [API Documentation](#-api-documentation)
@@ -597,6 +598,152 @@ docker exec healthflow-proxy-fhir mvn test -Dtest=FhirProxyControllerTest
 - ✅ SHAP explanation generation
 - ✅ Batch predictions
 - ✅ High-risk patient identification
+
+---
+
+## 🎯 Code Quality (SonarQube)
+
+### Overview
+
+**SonarQube** provides automated code quality and security analysis for all HealthFlowMS Python services.
+
+**URL:** http://localhost:9000  
+**Credentials:** admin / admin (change on first login)  
+**Project:** healtiMS
+
+### What SonarQube Analyzes
+
+- 🐛 **Bugs** - Code defects and potential errors
+- 🔒 **Security Vulnerabilities** - Security issues and hotspots
+- 📏 **Code Smells** - Maintainability issues
+- 📊 **Code Coverage** - Test coverage percentage  
+- 🔄 **Code Duplication** - Duplicated code blocks
+- 📈 **Complexity** - Cyclomatic complexity
+
+### Quick Start
+
+#### 1. Start SonarQube
+
+```bash
+# Start SonarQube service
+docker-compose up -d sonarqube
+
+# Check status
+docker-compose ps sonarqube
+
+# Wait for SonarQube to be ready (~2 minutes)
+docker-compose logs -f sonarqube
+# Look for: "SonarQube is operational"
+```
+
+#### 2. Access & Configure
+
+1. Open http://localhost:9000
+2. Login with `admin` / `admin`
+3. **Change password** when prompted
+4. Go to **My Account** → **Security** → **Generate Token**
+5. Name: `healthflowms-token`
+6. Copy the token
+
+#### 3. Create Project (First Time Only)
+
+1. Click **"+"** or **"Create Project"**
+2. Choose **"Manually"**
+3. Enter:
+   - Project key: `healtiMS`
+   - Display name: `HealthFlow-MS`
+4. Click **"Set Up"**
+
+#### 4. Run Analysis
+
+**Using sonar-scanner (Local install):**
+
+```bash
+# Navigate to project root
+cd c:\Users\Dark\Desktop\5iir\HealthFlowMS
+
+# Run analysis
+C:\sonar-scanner-8.0.1.6346-windows-x64\bin\sonar-scanner.bat
+```
+
+**Note:** The configuration is in `sonar-project.properties` at the root. Update your token in this file before running.
+
+**Or use Docker:**
+
+```bash
+docker run --rm \
+  --network=healthflowms_default \
+  -v "$(pwd):/usr/src" \
+  sonarsource/sonar-scanner-cli \
+  -Dsonar.projectKey=healtiMS \
+  -Dsonar.token=YOUR_TOKEN_HERE
+```
+
+### Analyzed Services
+
+**Current Analysis Scope:**
+
+| Service | Language | Lines of Code | Status |
+|---------|----------|---------------|--------|
+| **Score API** | Python 3.11 | ~2,000 | ✅ Analyzed |
+| **DeID** | Python 3.11 | ~800 | ✅ Analyzed |
+| **Featurizer** | Python 3.11 | ~1,200 | ✅ Analyzed |
+| **Model Risque** | Python 3.11 | ~1,000 | ✅ Analyzed |
+| **Audit Fairness** | Python 3.11 | ~600 | ✅ Analyzed |
+
+**Configuration:** [sonar-project.properties](file:///c:/Users/Dark/Desktop/5iir/HealthFlowMS/sonar-project.properties)
+
+### Viewing Results
+
+1. Open http://localhost:9000
+2. Click on the **"healtiMS"** project
+3. Explore:
+   - **Overview** - Quality gate status, key metrics
+   - **Issues** - All bugs, vulnerabilities, code smells
+   - **Measures** - Detailed metrics (coverage, complexity, duplication)
+   - **Code** - Browse source code with highlighted issues
+   - **Activity** - Analysis history
+
+### Quality Metrics
+
+After analysis, you'll see:
+
+- ✅ **Total Lines of Code** - All Python services combined
+- ✅ **Bugs** - Logic errors and potential issues
+- ✅ **Vulnerabilities** - Security weaknesses
+- ✅ **Code Smells** - Maintainability issues
+- ✅ **Technical Debt** - Estimated time to fix issues
+- ✅ **Duplications** - Percentage of duplicated code
+- ✅ **Complexity** - Cyclomatic complexity score
+
+### Best Practices
+
+1. **Run before commits**: Analyze code before pushing
+2. **Fix critical issues first**: Bugs > Vulnerabilities > Code Smells
+3. **Maintain quality gate**: Keep project passing quality standards
+4. **Reduce duplication**: Extract common code to functions
+5. **Follow PEP 8**: Python code style guidelines
+
+### Troubleshooting
+
+**SonarQube won't start:**
+```bash
+# Check if database exists
+docker exec healthflow-postgres psql -U healthflow -l | grep sonarqube
+
+# If missing, create it:
+docker exec healthflow-postgres psql -U healthflow -c "CREATE DATABASE sonarqube;"
+
+# Restart SonarQube
+docker-compose restart sonarqube
+```
+
+**Analysis fails:**
+- Verify SonarQube is accessible: http://localhost:9000/api/system/status
+- Check your token is valid in SonarQube → My Account → Security
+- Ensure `sonar-project.properties` has correct token
+
+**📚 Complete Guide:** [SONARQUBE.md](file:///c:/Users/Dark/Desktop/5iir/HealthFlowMS/SONARQUBE.md)
 
 ---
 
