@@ -28,6 +28,13 @@ public class FhirPatient {
     @Column(columnDefinition = "TEXT")
     private String resourceData;
 
+    private String gender;
+
+    @Column(name = "birth_date")
+    private String birthDate;
+
+    private Boolean active = true;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -45,4 +52,3 @@ public class FhirPatient {
         updatedAt = LocalDateTime.now();
     }
 }
-

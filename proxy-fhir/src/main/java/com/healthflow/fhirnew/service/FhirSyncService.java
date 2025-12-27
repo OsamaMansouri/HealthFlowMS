@@ -30,6 +30,9 @@ public class FhirSyncService {
     @Autowired
     private FhirBundleRepository bundleRepository;
 
+    @Autowired
+    private FhirConditionRepository conditionRepository;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public void syncAllResources() {
@@ -39,15 +42,19 @@ public class FhirSyncService {
         syncResourceType("Condition");
     }
 
+    public Object getAllPatients() {
+        return patientRepository.findAll();
+    }
+
     public void syncResourceType(String resourceType) {
         try {
             String url = fhirClientConfig.getFhirServerUrl() + "/" + resourceType;
             String response = restTemplate.getForObject(url, String.class);
-            
+
             if (response != null) {
                 JsonNode bundle = objectMapper.readTree(response);
                 JsonNode entries = bundle.get("entry");
-                
+
                 if (entries != null && entries.isArray()) {
                     for (JsonNode entry : entries) {
                         JsonNode resource = entry.get("resource");
@@ -75,6 +82,9 @@ public class FhirSyncService {
                 break;
             case "Observation":
                 saveObservation(fhirId, resourceData, resource);
+                break;
+            case "Condition":
+                saveCondition(fhirId, resourceData, resource);
                 break;
             default:
                 break;
@@ -121,5 +131,21 @@ public class FhirSyncService {
         observation.setPatientFhirId(patientFhirId);
         observationRepository.save(observation);
     }
-}
 
+    private void saveCondition(String fhirId, String resourceData, JsonNode resource) {
+        String patientFhirId = null;
+        JsonNode subject = resource.get("subject");
+        if (subject != null && subject.has("reference")) {
+            String reference = subject.get("reference").asText();
+            if (reference.startsWith("Patient/")) {
+                patientFhirId = reference.substring(8);
+            }
+        }
+
+        FhirCondition condition = conditionRepository.findByFhirId(fhirId)
+                .orElse(FhirCondition.builder().fhirId(fhirId).build());
+        condition.setResourceData(resourceData);
+        condition.setPatientFhirId(patientFhirId);
+        conditionRepository.save(condition);
+    }
+}

@@ -21,6 +21,7 @@ from app.schemas import (
     DeIdStats, HealthResponse
 )
 from app.deid_service import DeIdentificationService
+from prometheus_fastapi_instrumentator import Instrumentator
 
 settings = get_settings()
 logger = structlog.get_logger()
@@ -33,6 +34,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Initialize Prometheus metrics BEFORE middlewares
+Instrumentator().instrument(app).expose(app)
 
 # Custom middleware to FORCE CORS headers on ALL responses
 # This runs AFTER all other middleware to ensure headers are always present

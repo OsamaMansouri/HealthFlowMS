@@ -1,0 +1,149 @@
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_IMAGE = "healthflowms/deid"
+        DOCKER_TAG = "${env.BUILD_NUMBER}"
+        DOCKER_REGISTRY = "docker.io"
+        PYTHON_VERSION = "3.11"
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Source code already checked out by SCM'
+            }
+        }
+        
+        stage('Setup Python Environment') {
+            steps {
+                echo 'Setting up Python virtual environment...'
+                dir('deid') {
+                    sh '''
+                        python3 -m venv venv
+                        . venv/bin/activate
+                        pip install --upgrade pip
+                        pip install -r requirements.txt
+                        pip install -r requirements-dev.txt || true
+                    '''
+                }
+            }
+        }
+        
+        stage('Lint') {
+            steps {
+                echo 'Running linting checks...'
+                dir('deid') {
+                    sh '''
+                        . venv/bin/activate
+                        flake8 app/ --max-line-length=120 || true
+                        pylint app/ || true
+                    '''
+                }
+            }
+        }
+        
+        stage('Test') {
+            steps {
+                echo 'Running unit tests...'
+                dir('deid') {
+                    sh '''
+                        . venv/bin/activate
+                        pytest tests/ --cov=app --cov-report=xml --cov-report=html || true
+                    '''
+                }
+            }
+            post {
+                always {
+                    junit 'deid/test-results/*.xml' || true
+                    publishHTML([
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'deid/htmlcov',
+                        reportFiles: 'index.html',
+                        reportName: 'Coverage Report'
+                    ])
+                }
+            }
+        }
+        
+        stage('Security Scan') {
+            steps {
+                echo 'Running security scan...'
+                dir('deid') {
+                    sh '''
+                        . venv/bin/activate
+                        safety check || true
+                        bandit -r app/ || true
+                    '''
+                }
+            }
+        }
+        
+        stage('Docker Build') {
+            steps {
+                echo 'Building Docker image...'
+                dir('deid') {
+                    sh """
+                        docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
+                        docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest
+                    """
+                }
+            }
+        }
+        
+        stage('Docker Push') {
+            when {
+                branch 'main'
+            }
+            steps {
+                echo 'Pushing Docker image to registry...'
+                withCredentials([usernamePassword(credentialsId: 'docker-registry', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh """
+                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin ${DOCKER_REGISTRY}
+                        docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
+                        docker push ${DOCKER_IMAGE}:latest
+                    """
+                }
+            }
+        }
+        
+        stage('Deploy to Staging') {
+            when {
+                branch 'develop'
+            }
+            steps {
+                echo 'Deploying to staging environment...'
+                sh '''
+                    docker-compose -f docker-compose.staging.yml up -d deid
+                '''
+            }
+        }
+        
+        stage('Deploy to Production') {
+            when {
+                branch 'main'
+            }
+            steps {
+                echo 'Deploying to production environment...'
+                input message: 'Deploy to production?', ok: 'Deploy'
+                sh '''
+                    docker-compose -f docker-compose.prod.yml up -d deid
+                '''
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+        always {
+            deleteDir()
+        }
+    }
+}

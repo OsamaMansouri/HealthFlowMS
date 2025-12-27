@@ -17,6 +17,7 @@ from app.schemas import (
 )
 from app.feature_service import FeatureService
 from app.nlp_service import nlp_service
+from prometheus_fastapi_instrumentator import Instrumentator
 
 settings = get_settings()
 logger = structlog.get_logger()
@@ -29,6 +30,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Initialize Prometheus metrics BEFORE middlewares
+Instrumentator().instrument(app).expose(app)
 
 # CORS middleware
 app.add_middleware(
@@ -44,6 +48,7 @@ app.add_middleware(
 async def startup_event():
     """Initialize on startup."""
     logger.info("Starting Featurizer service", port=settings.service_port)
+
     # Pre-load NLP models
     try:
         nlp_service.ensure_models_loaded()

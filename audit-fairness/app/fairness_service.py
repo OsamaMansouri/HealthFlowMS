@@ -7,14 +7,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 import structlog
 
-from evidently.report import Report
-from evidently.metric_preset import ClassificationPreset, DataDriftPreset
-from evidently.metrics import (
-    ClassificationQualityMetric,
-    ClassificationClassBalance,
-    ClassificationConfusionMatrix
-)
-
 from app.config import get_settings
 from app.models import (
     FairnessMetrics, BiasAlert, RiskPrediction, 

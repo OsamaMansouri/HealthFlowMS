@@ -1,0 +1,65 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'healthflow'
+    environment: 'development'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Load rules once and periodically evaluate them
+rule_files:
+  # - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # PostgreSQL Exporter
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    metrics_path: /metrics
+
+  # Score API (FastAPI)
+  - job_name: 'score-api'
+    static_configs:
+      - targets: ['score-api:8085']
+    metrics_path: /metrics
+
+  # DeID Service (FastAPI)
+  - job_name: 'deid'
+    static_configs:
+      - targets: ['deid:8082']
+    metrics_path: /metrics
+
+  # Featurizer Service (FastAPI)
+  - job_name: 'featurizer'
+    static_configs:
+      - targets: ['featurizer:8083']
+    metrics_path: /metrics
+
+  # Model Risque Service (FastAPI)
+  - job_name: 'model-risque'
+    static_configs:
+      - targets: ['model-risque:8084']
+    metrics_path: /metrics
+
+  # Audit Fairness Service
+  - job_name: 'audit-fairness'
+    static_configs:
+      - targets: ['audit-fairness:8086']
+    metrics_path: /metrics
+
+  # Proxy FHIR Service (Spring Boot Actuator)
+  - job_name: 'proxy-fhir'
+    static_configs:
+      - targets: ['proxy-fhir:8081']
+    metrics_path: /actuator/prometheus

@@ -6,3 +6,14 @@ bin/
 .settings/
 .classpath
 node_modules/
+
+# Jenkins
+jenkins/.env
+jenkins_backup/
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+env/
+

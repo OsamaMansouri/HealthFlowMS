@@ -1,0 +1,215 @@
+jenkins:
+  systemMessage: |
+    🏥 HealthFlowMS CI/CD Pipeline
+    Jenkins configured via Configuration as Code (JCasC)
+  
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "admin123"
+          name: "Administrator"
+          description: "Jenkins Administrator"
+
+  authorizationStrategy:
+    globalMatrix:
+      permissions:
+        - "Overall/Administer:admin"
+        - "Overall/Read:authenticated"
+
+  numExecutors: 4
+  
+  crumbIssuer:
+    standard:
+      excludeClientIPFromCrumb: false
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              scope: GLOBAL
+              id: "docker-registry"
+              username: "${DOCKER_USERNAME}"
+              password: "${DOCKER_PASSWORD}"
+              description: "Docker Registry Credentials"
+          - usernamePassword:
+              scope: GLOBAL
+              id: "github-credentials"
+              username: "${GITHUB_USERNAME}"
+              password: "${GITHUB_TOKEN}"
+              description: "GitHub Credentials"
+
+jobs:
+  - script: |
+      multibranchPipelineJob('HealthFlowMS-Pipeline') {
+        displayName('HealthFlowMS Multi-Branch Pipeline')
+        description('Complete CI/CD pipeline for HealthFlowMS microservices')
+        
+        branchSources {
+          git {
+            id('healthflowms-repo')
+            remote('https://github.com/OsamaMansouri/HealthFlowMS.git')
+            credentialsId('github-credentials')
+            
+            traits {
+              gitBranchDiscovery()
+              gitTagDiscovery()
+            }
+          }
+        }
+        
+        factory {
+          workflowBranchProjectFactory {
+            scriptPath('Jenkinsfile')
+          }
+        }
+        
+        orphanedItemStrategy {
+          discardOldItems {
+            numToKeep(10)
+          }
+        }
+        
+        triggers {
+          periodic(5) // Scan for new branches every 5 minutes
+        }
+      }
+
+  - script: |
+      pipelineJob('Deploy-All-Services') {
+        displayName('Deploy All Services')
+        description('Deploy all HealthFlowMS microservices at once')
+        
+        definition {
+          cps {
+            script('''
+              pipeline {
+                agent any
+                
+                stages {
+                  stage('Deploy All') {
+                    steps {
+                      echo 'Deploying all HealthFlowMS services...'
+                      sh 'docker-compose up -d --build'
+                    }
+                  }
+                }
+                
+                post {
+                  success {
+                    echo '✅ All services deployed successfully!'
+                  }
+                  failure {
+                    echo '❌ Deployment failed!'
+                  }
+                }
+              }
+            '''.stripIndent())
+            sandbox(true)
+          }
+        }
+      }
+
+  - script: |
+      pipelineJob('Run-All-Tests') {
+        displayName('Run All Tests')
+        description('Execute all unit tests for all services')
+        
+        definition {
+          cps {
+            script('''
+              pipeline {
+                agent any
+                
+                stages {
+                  stage('Test Python Services') {
+                    parallel {
+                      stage('Score-API') {
+                        steps {
+                          dir('score-api') {
+                            sh 'docker exec healthflow-score-api pytest tests/ -v'
+                          }
+                        }
+                      }
+                      stage('DeID') {
+                        steps {
+                          dir('deid') {
+                            sh 'docker exec healthflow-deid pytest tests/ -v'
+                          }
+                        }
+                      }
+                      stage('Featurizer') {
+                        steps {
+                          dir('featurizer') {
+                            sh 'docker exec healthflow-featurizer pytest tests/ -v'
+                          }
+                        }
+                      }
+                      stage('Model-Risque') {
+                        steps {
+                          dir('model-risque') {
+                            sh 'docker exec healthflow-model-risque pytest tests/ -v'
+                          }
+                        }
+                      }
+                    }
+                  }
+                  
+                  stage('Test Java Service') {
+                    steps {
+                      dir('proxy-fhir') {
+                        sh 'docker exec healthflow-proxy-fhir mvn test'
+                      }
+                    }
+                  }
+                }
+                
+                post {
+                  success {
+                    echo '✅ All tests passed!'
+                  }
+                  failure {
+                    echo '❌ Some tests failed!'
+                  }
+                }
+              }
+            '''.stripIndent())
+            sandbox(true)
+          }
+        }
+      }
+
+unclassified:
+  location:
+    url: "http://localhost:8088/"
+    adminAddress: "admin@healthflow.local"
+
+  gitSCM:
+    globalConfigName: "HealthFlowMS Jenkins"
+    globalConfigEmail: "jenkins@healthflow.local"
+
+tool:
+  git:
+    installations:
+      - name: "Default"
+        home: "git"
+
+  maven:
+    installations:
+      - name: "Maven 3.9"
+        properties:
+          - installSource:
+              installers:
+                - maven:
+                    id: "3.9.6"
+
+  jdk:
+    installations:
+      - name: "JDK 17"
+        properties:
+          - installSource:
+              installers:
+                - adoptOpenJdkInstaller:
+                    id: "jdk-17.0.9+9"

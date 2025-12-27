@@ -27,6 +27,7 @@ from app.auth import (
 from app.services import UserService, AuditService, RiskScoreService, PatientService
 from app.models import DeidPatient, RiskPrediction
 from app.cache import init_redis, get_cache, set_cache, delete_cache, redis_client
+from prometheus_fastapi_instrumentator import Instrumentator
 
 settings = get_settings()
 logger = structlog.get_logger()
@@ -44,6 +45,9 @@ app = FastAPI(
 cors_origins = settings.cors_origins_list
 print(f"[CORS] Configured origins: {cors_origins}")  # Debug print
 logger.info("CORS origins configured", origins=cors_origins)
+
+# Initialize Prometheus metrics BEFORE middlewares
+Instrumentator().instrument(app).expose(app)
 
 # CORS middleware - must be added before routes
 # Note: allow_origins=["*"] doesn't work with allow_credentials=True

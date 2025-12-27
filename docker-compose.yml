@@ -12,10 +12,23 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U healthflow"]
+      test: [ "CMD-SHELL", "pg_isready -U healthflow" ]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # PostgreSQL Exporter - Metrics for Postgres
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: healthflow-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://healthflow:healthflow123@postgres:5432/healthflow?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
 
   # Score API Service
   score-api:
@@ -107,15 +120,16 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/healthflow
       - SPRING_DATASOURCE_USERNAME=healthflow
       - SPRING_DATASOURCE_PASSWORD=healthflow123
-      - FHIR_SERVER_URL=http://healthflow-hapi-fhir:8080/fhir
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
 
-  # Frontend (using existing image)
+  # Frontend - Web Interface (Vite App)
   frontend:
-    image: healthflowms-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     container_name: healthflow-frontend
     ports:
       - "8087:80"
@@ -139,7 +153,7 @@ services:
     command: redis-server --appendonly yes
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -175,6 +189,89 @@ services:
       "
     restart: unless-stopped
 
+  # Prometheus - Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: healthflow-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    restart: unless-stopped
+    depends_on:
+      - score-api
+      - deid
+      - featurizer
+      - model-risque
+      - audit-fairness
+      - proxy-fhir
+
+  # Grafana - Metrics Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: healthflow-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+  # Jenkins - CI/CD Pipeline
+  jenkins:
+    build:
+      context: ./jenkins
+      dockerfile: Dockerfile
+    container_name: healthflow-jenkins
+    ports:
+      - "8088:8080"
+      - "50000:50000"
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+    volumes:
+      - jenkins_data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    privileged: true
+
+  # SonarQube - Code Quality & Security
+  sonarqube:
+    image: sonarqube:community
+    container_name: healthflow-sonarqube
+    ports:
+      - "9000:9000"
+    environment:
+      - SONAR_JDBC_URL=jdbc:postgresql://postgres:5432/sonarqube
+      - SONAR_JDBC_USERNAME=healthflow
+      - SONAR_JDBC_PASSWORD=healthflow123
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
+  prometheus_data:
+  grafana_data:
+  jenkins_data:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:

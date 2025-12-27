@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "a59a956e-c857-433f-a2be-51d4a55c5457",
 		"name": "HealthFlow",
-		"description": "Collection complète pour tester tous les microservices HealthFlow-MS\n\n## Services:\n- ScoreAPI (8085) - API principale\n- HAPI FHIR (8090) - Serveur FHIR\n- ProxyFHIR (8081) - Synchronisation FHIR\n- DeID (8082) - Anonymisation\n- Featurizer (8083) - Extraction features\n- ModelRisque (8084) - Prédictions ML\n- AuditFairness (8086) - Dashboard équité\n\n## Utilisateurs:\n- admin / admin123\n- clinician / admin123\n- researcher / admin123\n- auditor / admin123",
+		"description": "Collection complète pour tester tous les microservices HealthFlow-MS\n\n## Services Microservices:\n- ScoreAPI (8085) - API principale\n- HAPI FHIR (8090) - Serveur FHIR\n- ProxyFHIR (8081) - Synchronisation FHIR\n- DeID (8082) - Anonymisation\n- Featurizer (8083) - Extraction features\n- ModelRisque (8084) - Prédictions ML\n- AuditFairness (8086) - Dashboard équité\n\n## Infrastructure & Monitoring:\n- Prometheus (9090) - Collecte de métriques\n- Grafana (3000) - Visualisation dashboards\n- Jenkins (8088) - CI/CD Pipeline\n\n## Utilisateurs:\n- admin / admin123\n- clinician / admin123\n- researcher / admin123\n- auditor / admin123",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "6565244"
 	},
@@ -1152,6 +1152,340 @@
 						}
 					},
 					"response": []
+				},
+				{
+					"name": "10. Prometheus - Monitoring (9090)",
+					"item": [
+						{
+							"name": "10.1 Check Prometheus Health",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}:9090/-/healthy",
+									"host": [
+										"{{base_url}}"
+									],
+									"port": "9090",
+									"path": [
+										"-",
+										"healthy"
+									]
+								},
+								"description": "Vérifier que Prometheus est opérationnel"
+							},
+							"response": []
+						},
+						{
+							"name": "10.2 Get All Targets",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}:9090/api/v1/targets",
+									"host": [
+										"{{base_url}}"
+									],
+									"port": "9090",
+									"path": [
+										"api",
+										"v1",
+										"targets"
+									]
+								},
+								"description": "Récupérer l'état de tous les targets (services monitorés)"
+							},
+							"response": []
+						},
+						{
+							"name": "10.3 Query - Service UP Status",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}:9090/api/v1/query?query=up",
+									"host": [
+										"{{base_url}}"
+									],
+									"port": "9090",
+									"path": [
+										"api",
+										"v1",
+										"query"
+									],
+									"query": [
+										{
+											"key": "query",
+											"value": "up"
+										}
+									]
+								},
+								"description": "Vérifier quels services sont UP (1) ou DOWN (0)"
+							},
+							"response": []
+						},
+						{
+							"name": "10.4 Query - HTTP Request Rate",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}:9090/api/v1/query?query=rate(http_requests_total[5m])",
+									"host": [
+										"{{base_url}}"
+									],
+									"port": "9090",
+									"path": [
+										"api",
+										"v1",
+										"query"
+									],
+									"query": [
+										{
+											"key": "query",
+											"value": "rate(http_requests_total[5m])"
+										}
+									]
+								},
+								"description": "Taux de requêtes HTTP sur les 5 dernières minutes"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "11. Grafana - Dashboards (3000)",
+					"item": [
+						{
+							"name": "11.1 Check Grafana Health",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}:3000/api/health",
+									"host": [
+										"{{base_url}}"
+									],
+									"port": "3000",
+									"path": [
+										"api",
+										"health"
+									]
+								},
+								"description": "Vérifier que Grafana est opérationnel"
+							},
+							"response": []
+						},
+						{
+							"name": "11.2 Get Datasources",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Basic YWRtaW46YWRtaW4=",
+										"description": "admin:admin en Base64"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}:3000/api/datasources",
+									"host": [
+										"{{base_url}}"
+									],
+									"port": "3000",
+									"path": [
+										"api",
+										"datasources"
+									]
+								},
+								"description": "Lister toutes les sources de données (Prometheus)"
+							},
+							"response": []
+						},
+						{
+							"name": "11.3 Search Dashboards",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Basic YWRtaW46YWRtaW4="
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}:3000/api/search",
+									"host": [
+										"{{base_url}}"
+									],
+									"port": "3000",
+									"path": [
+										"api",
+										"search"
+									]
+								},
+								"description": "Rechercher les dashboards disponibles"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "12. Jenkins - CI/CD (8088)",
+					"item": [
+						{
+							"name": "12.1 Get Jenkins Info",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}:8088/api/json",
+									"host": [
+										"{{base_url}}"
+									],
+									"port": "8088",
+									"path": [
+										"api",
+										"json"
+									]
+								},
+								"description": "Informations sur l'instance Jenkins"
+							},
+							"response": []
+						},
+						{
+							"name": "12.2 List Jobs",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}:8088/api/json?tree=jobs[name,url,color]",
+									"host": [
+										"{{base_url}}"
+									],
+									"port": "8088",
+									"path": [
+										"api",
+										"json"
+									],
+									"query": [
+										{
+											"key": "tree",
+											"value": "jobs[name,url,color]"
+										}
+									]
+								},
+								"description": "Liste des jobs/pipelines Jenkins"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "13. ProxyFHIR - Actuator Metrics",
+					"item": [
+						{
+							"name": "13.1 Actuator Health (Detailed)",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}:8081/actuator/health",
+									"host": [
+										"{{base_url}}"
+									],
+									"port": "8081",
+									"path": [
+										"actuator",
+										"health"
+									]
+								},
+								"description": "Health check détaillé avec composants (DB, disk space, ping)"
+							},
+							"response": []
+						},
+						{
+							"name": "13.2 Prometheus Metrics",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}:8081/actuator/prometheus",
+									"host": [
+										"{{base_url}}"
+									],
+									"port": "8081",
+									"path": [
+										"actuator",
+										"prometheus"
+									]
+								},
+								"description": "Métriques au format Prometheus (JVM, HTTP, DB, custom)"
+							},
+							"response": []
+						},
+						{
+							"name": "13.3 List All Metrics",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}:8081/actuator/metrics",
+									"host": [
+										"{{base_url}}"
+									],
+									"port": "8081",
+									"path": [
+										"actuator",
+										"metrics"
+									]
+								},
+								"description": "Liste de toutes les métriques disponibles"
+							},
+							"response": []
+						},
+						{
+							"name": "13.4 JVM Memory Used",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}:8081/actuator/metrics/jvm.memory.used",
+									"host": [
+										"{{base_url}}"
+									],
+									"port": "8081",
+									"path": [
+										"actuator",
+										"metrics",
+										"jvm.memory.used"
+									]
+								},
+								"description": "Utilisation mémoire JVM en bytes"
+							},
+							"response": []
+						},
+						{
+							"name": "13.5 HTTP Server Requests",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}:8081/actuator/metrics/http.server.requests",
+									"host": [
+										"{{base_url}}"
+									],
+									"port": "8081",
+									"path": [
+										"actuator",
+										"metrics",
+										"http.server.requests"
+									]
+								},
+								"description": "Statistiques des requêtes HTTP (count, total time, max)"
+							},
+							"response": []
+						}
+					]
 				}
 			]
 		}

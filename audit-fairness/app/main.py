@@ -7,6 +7,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 from flask import Flask, jsonify
+from prometheus_client import make_wsgi_app
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 from app.config import get_settings
 from app.database import get_db_session
@@ -16,6 +18,11 @@ settings = get_settings()
 
 # Create Flask server
 server = Flask(__name__)
+
+# Add Prometheus metrics
+server.wsgi_app = DispatcherMiddleware(server.wsgi_app, {
+    '/metrics': make_wsgi_app()
+})
 
 # Create Dash app
 app = dash.Dash(
