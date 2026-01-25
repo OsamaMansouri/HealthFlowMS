@@ -12,7 +12,7 @@
 
 
 ---
-## Vidio 
+## Vedio 
 https://drive.google.com/file/d/1_KMCLErM4VGnT2cfkwU6yiGiAZ04_Y7y/view?usp=sharing
 
 https://drive.google.com/file/d/1IIRTxPdHFXMdKvZsxnrlv7nHkvQv1m16/view?usp=drive_link
